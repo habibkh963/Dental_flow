@@ -4,20 +4,58 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/colors.dart';
 import '../../controller/patients_controller.dart';
 
-// Common diseases list (mutable so users can add custom items)
 List<String> diseasesList = [
-  'Diabetes',
-  'Hypertension',
-  'Asthma',
-  'Heart Disease',
-  'Dental Anxiety',
-  'Bruxism',
-  'Xerostomia',
-  'Periodontitis',
-  'Gingivitis',
-  'Cavities',
+  'داء السكري',
+  'ارتفاع ضغط الدم',
+  'أمراض القلب',
+  'الربو',
+  'فقر الدم',
+  'اضطرابات التخثر',
+  'نقص المناعة',
+  'الحمل',
+
+  // حالات متعلقة بالفم والأسنان
+  'التهاب اللثة',
+  'أمراض دواعم السن',
+  'تسوس الأسنان',
+  'حساسية الأسنان',
+  'جفاف الفم',
+  'صرير الأسنان',
+  'قلق علاج الأسنان',
+  'رهاب طبيب الأسنان',
+  'نزيف اللثة',
+  'رائحة الفم الكريهة',
+
+  // حالات فموية خاصة
+  'تقرحات الفم',
+  'القلاع الفموي',
+  'اللسان الجغرافي',
+  'تشقق اللسان',
+  'الطلاوة الفموية',
+  'الحزاز الفموي',
+  'سرطان الفم',
+
+  // مشاكل المفصل والفك
+  'اضطرابات المفصل الفكي الصدغي',
+  'آلام الفك',
+  'تيبس الفك',
+
+  // حالات مرتبطة بالعلاج
+  'حساسية التخدير الموضعي',
+  'حساسية الأدوية',
+  'التهابات بعد خلع الأسنان',
+  'فشل زراعة الأسنان',
+  'التهاب حول الزرعات',
+
+  // أمراض عامة تؤثر على علاج الأسنان
+  'الصرع',
+  'أمراض الكبد',
+  'أمراض الكلى',
+  'هشاشة العظام',
+  'أمراض الغدة الدرقية',
 ];
 
 Future<void> openPatientDialog(
@@ -50,7 +88,7 @@ Future<void> openPatientDialog(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
             child: Container(
-              width: 550,
+              width: MediaQuery.widthOf(context) * 0.7,
               padding: const EdgeInsets.all(28),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(.95),
@@ -61,34 +99,34 @@ Future<void> openPatientDialog(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      isEdit ? "Edit Patient" : "Add New Patient",
+                      isEdit ? "تعديل المريض" : "إضافة مريض ",
                       style: GoogleFonts.poppins(
                         fontSize: 22,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF2A9D8F),
+                        color: AppColors.mainColor,
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _field(first, "First name"),
+                    _field(first, "الاسم الأول"),
                     const SizedBox(height: 12),
-                    _field(last, "Last name"),
+                    _field(last, "الكنية"),
                     const SizedBox(height: 12),
-                    _field(phone, "Phone"),
+                    _field(phone, "رقم الهاتف"),
                     const SizedBox(height: 12),
-                    _field(email, "Email"),
+                    _field(email, "البريد الالكتروني"),
                     const SizedBox(height: 12),
-                    _field(address, "Address", maxLines: 2),
+                    _field(address, "العنوان", maxLines: 2),
                     const SizedBox(height: 18),
 
                     /// Diseases Section
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Medical Conditions',
+                        'الحالات الطبية الخاصة',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: const Color(0xFF2A9D8F),
+                          color: AppColors.mainColor,
                         ),
                       ),
                     ),
@@ -100,7 +138,7 @@ Future<void> openPatientDialog(
                         Expanded(
                           child: TextField(
                             controller: customDiseaseController,
-                            decoration: _dec('Add disease (type and press +)'),
+                            decoration: _dec('اختر الحالات  (اضغط للاضافة +)'),
                             onSubmitted: (val) {
                               final v = val.trim();
                               if (v.isEmpty) return;
@@ -118,7 +156,7 @@ Future<void> openPatientDialog(
                         Container(
                           height: 44,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF2A9D8F),
+                            color: AppColors.mainColor,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: IconButton(
@@ -148,10 +186,10 @@ Future<void> openPatientDialog(
                         return FilterChip(
                           label: Text(
                             disease,
-                            style: TextStyle(
+                            style: GoogleFonts.poppins(
                               color: isSelected
                                   ? Colors.white
-                                  : const Color(0xFF2A9D8F),
+                                  : AppColors.mainColor,
                               fontWeight: isSelected
                                   ? FontWeight.w600
                                   : FontWeight.w500,
@@ -168,11 +206,11 @@ Future<void> openPatientDialog(
                             });
                           },
                           backgroundColor: Colors.white,
-                          selectedColor: const Color(0xFF2A9D8F),
+                          selectedColor: AppColors.mainColor,
                           side: BorderSide(
                             color: isSelected
-                                ? const Color(0xFF2A9D8F)
-                                : const Color(0xFF2A9D8F).withOpacity(0.3),
+                                ? AppColors.mainColor
+                                : AppColors.mainColor.withOpacity(0.3),
                           ),
                         );
                       }).toList(),
@@ -183,12 +221,12 @@ Future<void> openPatientDialog(
                       children: [
                         TextButton(
                           onPressed: () => Get.back(),
-                          child: const Text("Cancel"),
+                          child: const Text("الغاء"),
                         ),
                         const SizedBox(width: 12),
                         FilledButton(
                           style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF2A9D8F),
+                            backgroundColor: AppColors.mainColor,
                             padding: const EdgeInsets.symmetric(
                               horizontal: 24,
                               vertical: 14,
@@ -215,7 +253,7 @@ Future<void> openPatientDialog(
 
                             Get.back();
                           },
-                          child: const Text('Save'),
+                          child: const Text('حفظ'),
                         ),
                       ],
                     ),

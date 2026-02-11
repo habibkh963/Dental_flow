@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 class AppointmentNotificationCard extends StatelessWidget {
@@ -60,8 +61,7 @@ class AppointmentNotificationCard extends StatelessWidget {
     final lastName = appointment['last_name'] ?? '';
     final phone = appointment['phone'] ?? '';
     final time = appointment['time'] ?? '--:--';
-    final status = (appointment['status'] as String? ?? 'scheduled')
-        .toLowerCase();
+    final status = (appointment['status'] as String? ?? 'مجدولة').toLowerCase();
 
     return Material(
       color: Colors.transparent,
@@ -125,7 +125,10 @@ class AppointmentNotificationCard extends StatelessWidget {
         children: [
           Icon(Icons.phone, size: 14, color: Colors.grey[500]),
           const SizedBox(width: 8),
-          Text(phone, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+          Text(
+            phone,
+            style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600]),
+          ),
         ],
       ),
     );
@@ -160,8 +163,8 @@ class AppointmentNotificationCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                isUpcoming ? 'URGENT' : 'SCHEDULED',
-                style: TextStyle(
+                isUpcoming ? 'عاجلة' : 'مجدولة',
+                style: GoogleFonts.poppins(
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
@@ -179,8 +182,8 @@ class AppointmentNotificationCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: 48),
       child: Text(
-        'Notes: ${appointment['notes']}',
-        style: TextStyle(
+        'ملاحظات: ${appointment['notes']}',
+        style: GoogleFonts.poppins(
           fontSize: 12,
           color: Colors.grey[600],
           fontStyle: FontStyle.italic,

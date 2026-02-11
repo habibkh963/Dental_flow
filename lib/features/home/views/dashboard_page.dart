@@ -4,23 +4,15 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../controllers/dash_board_controller.dart';
-import 'widgets/dashboard_charts.dart';
 import 'widgets/appointment_notification_card.dart';
 import 'widgets/urgent_appointment_alert.dart';
+import '../../inventory_manage/views/widgets/daily_payment_summary_widget.dart';
 
 String? tag = UniqueKey().toString();
 
 class DashboardPage extends StatelessWidget {
   DashboardPage({super.key});
-  final dashBoardController = Get.put(
-    DashBoardController(),
-    permanent: false,
-    builder: () {
-      tag = UniqueKey().toString();
-      return DashBoardController();
-    },
-    tag: tag,
-  );
+  final dashBoardController = Get.find<DashBoardController>();
 
   @override
   Widget build(BuildContext context) {
@@ -31,52 +23,20 @@ class DashboardPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Urgent Appointment Alert (if any)
-            Obx(() {
-              final urgent = dashBoardController.todayAppointments
-                  .where((apt) => _isUpcomingAppointment(apt['time']))
-                  .toList();
+            // Obx(() {
+            //   final urgent = dashBoardController.todayAppointments
+            //       .where((apt) => _isUpcomingAppointment(apt['time']))
+            //       .toList();
 
-              return UrgentAppointmentAlert(urgentAppointments: urgent);
-            }),
-
-            // Stat Cards
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: MediaQuery.of(context).size.width > 1200 ? 4 : 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 3 / 3.5,
-              children: [
-                Obx(() {
-                  return _StatCard(
-                    title: 'Patients',
-                    icon: Icons.people,
-                    value: dashBoardController.numberOfPatients.value
-                        .toString(),
-                  );
-                }),
-                Obx(() {
-                  return _StatCard(
-                    title: 'Appointments Today',
-                    icon: Icons.event,
-                    value: dashBoardController.appointmentsToday.value
-                        .toString(),
-                    hasNotification:
-                        dashBoardController.hasUrgentAppointments.value,
-                  );
-                }),
-                Obx(() {
-                  return _StatCard(
-                    title: 'Low Stock Items',
-                    icon: Icons.inventory_2,
-                    value: dashBoardController.lowStockCount.value.toString(),
-                    hasNotification: dashBoardController.hasLowStock.value,
-                  );
-                }),
-              ],
-            ),
+            //   return UrgentAppointmentAlert(
+            //     urgentAppointments: dashBoardController.todayAppointments.value,
+            //   );
+            // }),
+            // const SizedBox(height: 32),
+            // Daily Payment Summary Widget
+            DailyPaymentSummaryWidget(),
             const SizedBox(height: 32),
+            // Stat Cards
 
             // Today's Appointments Section
             Obx(() {
@@ -97,7 +57,7 @@ class DashboardPage extends StatelessWidget {
                   Row(
                     children: [
                       Text(
-                        "Today's Appointments",
+                        "معاينات اليوم",
                         style: GoogleFonts.poppins(
                           fontSize: 22.sp,
                           fontWeight: FontWeight.w700,
@@ -116,8 +76,8 @@ class DashboardPage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          '${appointments.length} appointments',
-                          style: TextStyle(
+                          '${appointments.length} معاينة',
+                          style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: Theme.of(context).primaryColor,
@@ -131,7 +91,7 @@ class DashboardPage extends StatelessWidget {
                   // Urgent/Upcoming appointments first
                   if (upcomingAppointments.isNotEmpty) ...[
                     Text(
-                      '🔔 Upcoming (Next 30 minutes)',
+                      '🔔 قادمة (خلال 30 دقيقة)',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: Colors.orange,
                         fontWeight: FontWeight.w600,
@@ -150,7 +110,7 @@ class DashboardPage extends StatelessWidget {
                   // Other appointments
                   if (appointments.length > upcomingAppointments.length) ...[
                     Text(
-                      'Other Appointments Today',
+                      'معاينات اخرى اليوم',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -171,6 +131,43 @@ class DashboardPage extends StatelessWidget {
                 ],
               );
             }),
+            const SizedBox(height: 32),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: MediaQuery.of(context).size.width > 1200 ? 4 : 2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 3 / 3.5,
+              children: [
+                Obx(() {
+                  return _StatCard(
+                    title: 'المرضى',
+                    icon: Icons.people,
+                    value: dashBoardController.numberOfPatients.value
+                        .toString(),
+                  );
+                }),
+                Obx(() {
+                  return _StatCard(
+                    title: 'معاينات اليوم',
+                    icon: Icons.event,
+                    value: dashBoardController.appointmentsToday.value
+                        .toString(),
+                    hasNotification:
+                        dashBoardController.hasUrgentAppointments.value,
+                  );
+                }),
+                Obx(() {
+                  return _StatCard(
+                    title: 'مواد على وشك النفاذ',
+                    icon: Icons.inventory_2,
+                    value: dashBoardController.lowStockCount.value.toString(),
+                    hasNotification: dashBoardController.hasLowStock.value,
+                  );
+                }),
+              ],
+            ),
 
             // // Low Stock Items Section
             // Obx(() {
@@ -282,7 +279,7 @@ class DashboardPage extends StatelessWidget {
             //     ],
             //   );
             // }),
-            const DashboardCharts(),
+            // const DashboardCharts(),
           ],
         ),
       ),

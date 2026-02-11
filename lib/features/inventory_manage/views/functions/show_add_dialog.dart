@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/colors.dart';
+
 void showAddDialog({
   required nameController,
   required qtyController,
@@ -24,30 +26,33 @@ void showAddDialog({
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Add New Inventory',
+              'اضافة منتج جديد',
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF2A9D8F),
+                color: AppColors.mainColor,
               ),
             ),
 
             const SizedBox(height: 20),
 
-            TextField(controller: nameController, decoration: dec('Item name')),
+            TextField(
+              controller: nameController,
+              decoration: dec('اسم المنتج'),
+            ),
             const SizedBox(height: 12),
 
             TextField(
               controller: qtyController,
               keyboardType: TextInputType.number,
-              decoration: dec('Quantity'),
+              decoration: dec('الكمية'),
             ),
             const SizedBox(height: 12),
 
             TextField(
               controller: thresholdController,
               keyboardType: TextInputType.number,
-              decoration: dec('Minimum alert'),
+              decoration: dec('الحد الادنى للتنبيه'),
             ),
 
             const SizedBox(height: 24),
@@ -57,12 +62,12 @@ void showAddDialog({
               children: [
                 TextButton(
                   onPressed: () => Get.back(),
-                  child: const Text('Cancel'),
+                  child: Text('الغاء', style: GoogleFonts.poppins()),
                 ),
                 const SizedBox(width: 12),
                 FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2A9D8F),
+                    backgroundColor: AppColors.mainColor,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 14,
@@ -82,7 +87,7 @@ void showAddDialog({
 
                     Get.back();
                   },
-                  child: const Text('Save'),
+                  child: Text('حفظ', style: GoogleFonts.poppins()),
                 ),
               ],
             ),

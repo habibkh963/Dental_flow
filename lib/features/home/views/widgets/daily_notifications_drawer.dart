@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:dental_managment_system/features/home/controllers/dash_board_controller.dart';
 import 'package:dental_managment_system/features/home/views/widgets/notification_tile.dart';
+import '../../../../core/colors.dart';
 import '../../controllers/navigation_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -48,17 +49,17 @@ class DailyNotificationsDrawer extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "Notifications",
+                            "الاشعارات",
                             style: GoogleFonts.poppins(
                               fontSize: 18.sp,
                               fontWeight: FontWeight.w700,
-                              color: const Color(0xFF2A9D8F),
+                              color: AppColors.mainColor,
                             ),
                           ),
                           SizedBox(height: 6.h),
                           Obx(
                             () => Text(
-                              '${ctrl.todayAppointments.length} appointments · ${ctrl.lowStockItems.length} low-stock',
+                              '${ctrl.todayAppointments.length} معاينة · ${ctrl.lowStockItems.length} مخزون منخفض',
                               style: GoogleFonts.poppins(
                                 fontSize: 12.sp,
                                 color: Colors.grey[600],
@@ -84,7 +85,7 @@ class DailyNotificationsDrawer extends StatelessWidget {
                     if (appts.isEmpty && low.isEmpty) {
                       return Center(
                         child: Text(
-                          'No notifications for today',
+                          'لا اشعاراتا اليوم',
                           style: GoogleFonts.poppins(
                             fontSize: 14.sp,
                             color: Colors.grey[600],
@@ -101,7 +102,7 @@ class DailyNotificationsDrawer extends StatelessWidget {
                           Padding(
                             padding: EdgeInsets.symmetric(vertical: 8.h),
                             child: Text(
-                              'Appointments',
+                              'المعاينات',
                               style: GoogleFonts.poppins(
                                 fontSize: 14.sp,
                                 fontWeight: FontWeight.w700,
@@ -135,8 +136,8 @@ class DailyNotificationsDrawer extends StatelessWidget {
                                           })
                                           .then((_) => ctrl.loadStats());
                                       Get.snackbar(
-                                        'Appointment',
-                                        'Marked complete',
+                                        'المعاينة',
+                                        'مكتملة',
                                         snackPosition: SnackPosition.BOTTOM,
                                       );
                                     },
@@ -149,8 +150,8 @@ class DailyNotificationsDrawer extends StatelessWidget {
                                           })
                                           .then((_) => ctrl.loadStats());
                                       Get.snackbar(
-                                        'Appointment',
-                                        'Marked cancelled',
+                                        'المعاينة',
+                                        'ملغية',
                                         snackPosition: SnackPosition.BOTTOM,
                                       );
                                     },
@@ -162,8 +163,8 @@ class DailyNotificationsDrawer extends StatelessWidget {
                                           .updateAppointment(id, {'status': s})
                                           .then((_) => ctrl.loadStats());
                                       Get.snackbar(
-                                        'Appointment',
-                                        'Status updated',
+                                        'المعاينة',
+                                        'تم التحديث',
                                         snackPosition: SnackPosition.BOTTOM,
                                       );
                                     },
@@ -176,7 +177,7 @@ class DailyNotificationsDrawer extends StatelessWidget {
                           Padding(
                             padding: EdgeInsets.symmetric(vertical: 8.h),
                             child: Text(
-                              'Inventory Alerts',
+                              'تنبيه المخزون',
                               style: GoogleFonts.poppins(
                                 fontSize: 14.sp,
                                 fontWeight: FontWeight.w700,
@@ -234,7 +235,7 @@ class DailyNotificationsDrawer extends StatelessWidget {
                                           ),
                                           SizedBox(height: 4.h),
                                           Text(
-                                            'Low stock: $qty',
+                                            'مخزون منخفض: $qty',
                                             style: GoogleFonts.poppins(
                                               fontSize: 12.sp,
                                               color: Colors.grey[700],

@@ -22,6 +22,11 @@ class DashBoardController extends GetxController {
   RxBool hasUrgentAppointments = false.obs;
   RxBool hasLowStock = false.obs;
 
+  // 💰 الأرباح والإيرادات الشهرية
+  RxDouble monthlyProfit = 0.0.obs;
+  RxDouble monthlyNetProfit = 0.0.obs;
+  RxDouble monthlyPaid = 0.0.obs;
+
   // track which appointments we've already notified about (by id)
   final Set<String> _notifiedAppointmentIds = <String>{};
 
@@ -127,6 +132,9 @@ class DashBoardController extends GetxController {
       hasUrgentAppointments.value = _hasUpcomingAppointments(todayAppts);
       hasLowStock.value = lowItems.isNotEmpty;
 
+      // 💰 حساب الأرباح الشهرية
+      await _calculateMonthlyStats();
+
       // cleanup and notify for upcoming appointments
       _cleanupNotified(todayAppts);
       _notifyUpcomingAppointments(todayAppts);
@@ -134,6 +142,71 @@ class DashBoardController extends GetxController {
       print('Error loading stats: $e');
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  /// 💰 حساب الإحصائيات المالية الشهرية
+  Future<void> _calculateMonthlyStats() async {
+    try {
+      final now = DateTime.now();
+      final startOfMonth = DateTime(now.year, now.month, 1);
+      final endOfMonth = DateTime(now.year, now.month + 1, 0);
+
+      // الحصول على جميع الفواتير للشهر الحالي (pending أو estimated)
+      final invoices = await db.db.query(
+        'invoices',
+        where: 'issued_at >= ? AND issued_at <= ?',
+        whereArgs: [
+          startOfMonth.toIso8601String(),
+          endOfMonth.toIso8601String(),
+        ],
+      );
+
+      double totalRevenue = 0;
+      for (var invoice in invoices) {
+        totalRevenue += (invoice['total'] as num?)?.toDouble() ?? 0;
+      }
+
+      // الحصول على جميع المدفوعات للشهر الحالي
+      final payments = await db.db.query(
+        'payments',
+        where: 'strftime("%Y-%m", datetime(substr(paid_at, 1, 19))) = ?',
+        whereArgs: [DateFormat('yyyy-MM').format(now)],
+      );
+
+      double totalPaid = 0;
+      for (var payment in payments) {
+        totalPaid += (payment['amount'] as num?)?.toDouble() ?? 0;
+      }
+
+      // حساب التكاليف من مخرجات المخزن للشهر الحالي
+      double totalCosts = 0;
+      try {
+        final inventoryOutputs = await db.db.query(
+          'inventory_outputs',
+          where: 'date >= ? AND date <= ?',
+          whereArgs: [
+            startOfMonth.toIso8601String(),
+            endOfMonth.toIso8601String(),
+          ],
+        );
+
+        for (var output in inventoryOutputs) {
+          totalCosts += (output['price'] as num?)?.toDouble() ?? 0;
+        }
+      } catch (e) {
+        print('Error calculating costs: $e');
+      }
+
+      // التحديث
+      // monthlyProfit = المبالغ المدفوعة (الربح الشهري)
+      // monthlyPaid = المبالغ المدفوعة
+      // monthlyNetProfit = المبالغ المدفوعة - المخرجات (صافي الربح)
+      monthlyProfit.value = totalPaid;
+      monthlyPaid.value = totalPaid;
+      monthlyNetProfit.value = totalPaid - totalCosts;
+    } catch (e) {
+      print('Error calculating monthly stats: $e');
     }
   }
 

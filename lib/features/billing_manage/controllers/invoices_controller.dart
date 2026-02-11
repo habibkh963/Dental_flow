@@ -5,7 +5,9 @@ import '../../../services/database_service.dart';
 class InvoicesController extends GetxController {
   final db = DatabaseService.instance;
 
-  var invoices = <Map<String, dynamic>>[].obs;
+  var invoices = <Map<String, dynamic>>[].obs; // كل الفواتير
+  var filteredInvoices = <Map<String, dynamic>>[].obs; // الفواتير بعد البحث
+
   var patients = <Map<String, dynamic>>[].obs;
   var isLoading = false.obs;
 
@@ -22,8 +24,11 @@ class InvoicesController extends GetxController {
       final inv = await db.getInvoices();
       patients.assignAll(p);
       invoices.assignAll(inv);
+
+      // بعد التحميل، خلي filteredInvoices = كل الفواتير
+      filteredInvoices.assignAll(inv);
     } catch (e) {
-      // swallow for now; UI can show snackbar if needed
+      // ممكن تعرض snackbar هنا
     } finally {
       isLoading.value = false;
     }
@@ -47,5 +52,36 @@ class InvoicesController extends GetxController {
   Future<void> addPayment(Map<String, dynamic> payment) async {
     await db.addPayment(payment);
     await loadAll();
+  }
+}
+
+extension InvoicesSearch on InvoicesController {
+  /// فلترة الفواتير حسب اسم المريض
+  void filterInvoices(String query) {
+    final q = query.trim().toLowerCase();
+
+    if (q.isEmpty) {
+      // رجّع القائمة الأصلية
+      filteredInvoices.assignAll(invoices);
+    } else {
+      filteredInvoices.assignAll(
+        invoices.where((inv) {
+          final patientName = getPatientName(
+            inv['patient_id'] ?? '',
+            patients.value,
+          );
+          return patientName.toLowerCase().contains(q);
+        }).toList(),
+      );
+    }
+  }
+
+  String getPatientName(String patientId, List<Map<String, dynamic>> patients) {
+    try {
+      final p = patients.firstWhere((x) => x['id'] == patientId);
+      return '${p['first_name'] ?? ''} ${p['last_name'] ?? ''}'.trim();
+    } catch (_) {
+      return '-';
+    }
   }
 }

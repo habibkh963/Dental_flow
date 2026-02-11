@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/colors.dart';
+
 void showEditDialog(Map<String, dynamic> item, controller) {
   final TextEditingController editQtyController = TextEditingController(
     text: item['qty'].toString(),
@@ -26,11 +28,11 @@ void showEditDialog(Map<String, dynamic> item, controller) {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Edit ${item['name']}',
+              'تعديل ${item['name']}',
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF2A9D8F),
+                color: AppColors.mainColor,
               ),
             ),
 
@@ -39,14 +41,14 @@ void showEditDialog(Map<String, dynamic> item, controller) {
             TextField(
               controller: editQtyController,
               keyboardType: TextInputType.number,
-              decoration: dec('New quantity'),
+              decoration: dec('كمية جديدة'),
             ),
             const SizedBox(height: 12),
 
             TextField(
               controller: editThresholdController,
               keyboardType: TextInputType.number,
-              decoration: dec('New minimum alert'),
+              decoration: dec('تحذير النفاذ الجديد'),
             ),
 
             const SizedBox(height: 24),
@@ -56,12 +58,12 @@ void showEditDialog(Map<String, dynamic> item, controller) {
               children: [
                 TextButton(
                   onPressed: () => Get.back(),
-                  child: const Text('Cancel'),
+                  child: Text('الغاء', style: GoogleFonts.poppins()),
                 ),
                 const SizedBox(width: 12),
                 FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2A9D8F),
+                    backgroundColor: AppColors.mainColor,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 14,
@@ -75,7 +77,7 @@ void showEditDialog(Map<String, dynamic> item, controller) {
 
                     Get.back();
                   },
-                  child: const Text('Save changes'),
+                  child: Text('حفظ', style: GoogleFonts.poppins()),
                 ),
               ],
             ),
@@ -89,6 +91,7 @@ void showEditDialog(Map<String, dynamic> item, controller) {
 InputDecoration dec(String hint) {
   return InputDecoration(
     hintText: hint,
+    hintStyle: GoogleFonts.poppins(),
     filled: true,
     fillColor: Colors.grey.withOpacity(0.05),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -100,9 +103,9 @@ InputDecoration dec(String hint) {
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
     ),
-    focusedBorder: const OutlineInputBorder(
+    focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(12)),
-      borderSide: BorderSide(color: Color(0xFF2A9D8F), width: 1.5),
+      borderSide: BorderSide(color: AppColors.mainColor, width: 1.5),
     ),
   );
 }

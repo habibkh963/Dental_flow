@@ -46,7 +46,7 @@ class PasswordScreen extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Unlock Now',
+                        'الغاء القفل الأن',
                         style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -57,7 +57,7 @@ class PasswordScreen extends StatelessWidget {
                         controller: passController,
                         obscureText: true,
                         decoration: InputDecoration(
-                          labelText: 'Password',
+                          labelText: 'كلمة المرور',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -71,14 +71,14 @@ class PasswordScreen extends StatelessWidget {
                             Get.offAll(() => AppShell()); // شاشة رئيسية
                           } else {
                             Get.snackbar(
-                              'Error',
-                              'Wrong password',
+                              'خطأ',
+                              'كلمة المرور خاطئة',
                               backgroundColor: Colors.red,
                               colorText: Colors.white,
                             );
                           }
                         },
-                        child: Text('Unlock', style: GoogleFonts.poppins()),
+                        child: Text('فتح القفل', style: GoogleFonts.poppins()),
                       ),
                     ],
                   ),

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../../../../core/colors.dart';
 
 class PatientHeader extends StatelessWidget {
   final VoidCallback onAdd;
@@ -11,14 +14,21 @@ class PatientHeader extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            'Patients',
+            'المرضى',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
         FilledButton.icon(
           onPressed: onAdd,
           icon: const Icon(Icons.add),
-          label: const Text('Add Patient'),
+          label: Text(
+            'إضافة مريض ',
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
         ),
       ],
     );

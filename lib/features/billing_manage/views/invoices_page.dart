@@ -1,9 +1,12 @@
+import 'package:dental_managment_system/core/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart' as intl;
 
-import '../../../services/database_service.dart';
+import '../../patient_manage/views/widgets/invoice_dialog.dart';
 import '../controllers/invoices_controller.dart';
 import 'widgets/payment_dialog.dart';
 
@@ -12,11 +15,13 @@ class InvoicesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _InvoicesPageBody();
+    return const _InvoicesPageBody();
   }
 }
 
 class _InvoicesPageBody extends StatefulWidget {
+  const _InvoicesPageBody();
+
   @override
   State<_InvoicesPageBody> createState() => _InvoicesPageBodyState();
 }
@@ -35,9 +40,22 @@ class _InvoicesPageBodyState extends State<_InvoicesPageBody> {
       case 'cancelled':
         return const Color(0xFFE76F51);
       case 'pending':
-        return const Color(0xFF2A9D8F);
+        return AppColors.mainColor;
       default:
         return const Color(0xFFE9C46A);
+    }
+  }
+
+  String _statusText(String s) {
+    switch (s.toLowerCase()) {
+      case 'paid':
+        return 'مدفوع';
+      case 'cancelled':
+        return 'ملغي';
+      case 'pending':
+        return 'قيد الانتظار';
+      default:
+        return s;
     }
   }
 
@@ -47,245 +65,342 @@ class _InvoicesPageBodyState extends State<_InvoicesPageBody> {
     ctrl.loadAll();
   }
 
-  String _getPatientName(
-    String patientId,
-    List<Map<String, dynamic>> patients,
-  ) {
-    try {
-      final p = patients.firstWhere((x) => x['id'] == patientId);
-      return '${p['first_name'] ?? ''} ${p['last_name'] ?? ''}'.trim();
-    } catch (_) {
-      return '-';
-    }
-  }
-
   Future<double> _getBalance(String invoiceId) async {
     return await ctrl.getRemaining(invoiceId);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          /// 🔹 Header
-          Row(
-            children: [
-              Text(
-                "Invoices",
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: () => _showNoPatientDialog(context),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 14,
-                  ),
-                  backgroundColor: const Color(0xFF2A9D8F),
-                ),
-                icon: const Icon(Icons.add),
-                label: const Text('New Invoice'),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 26),
-
-          /// 🔹 Table Header
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: Colors.white.withOpacity(0.9),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2A9D8F).withOpacity(0.1),
-                  blurRadius: 12,
-                ),
-              ],
-            ),
-            child: const Row(
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// 🔹 العنوان
+            Row(
               children: [
-                Expanded(flex: 2, child: Text("Patient")),
-                Expanded(child: Text("Total")),
-                Expanded(child: Text("Status")),
-                Expanded(child: Text("Issued")),
-                Expanded(child: Text("Actions")),
+                Text(
+                  "الفواتير",
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(width: 20.w),
+                Expanded(
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintStyle: GoogleFonts.poppins(
+                        color: AppColors.mainColor,
+                      ),
+
+                      hintText: 'ابحث عن اسم المريض...',
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: AppColors.mainColor,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      ctrl.filterInvoices(value); // تابع الفلترة
+                    },
+                  ),
+                ),
+                const Spacer(),
+                FilledButton.icon(
+                  onPressed: () async {
+                    openInvoiceDialog(context, null).then((value) {
+                      ctrl.reload();
+                    });
+                  },
+                  icon: const Icon(Icons.add),
+                  label: Text("فاتورة جديدة", style: GoogleFonts.poppins()),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.mainColor,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                  ),
+                ),
               ],
             ),
-          ),
 
-          const SizedBox(height: 10),
+            const SizedBox(height: 26),
 
-          /// 🔹 Invoices List
-          Expanded(
-            child: Obx(() {
-              if (ctrl.isLoading.value) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final patients = ctrl.patients;
-              final invoices = ctrl.invoices;
-
-              if (invoices.isEmpty) {
-                return const Center(child: Text('No invoices yet'));
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.only(top: 10),
-                itemCount: invoices.length,
-                itemBuilder: (_, i) {
-                  final inv = invoices[i];
-                  final status = inv['status'] ?? 'pending';
-                  final color = _statusColor(status);
-                  final patientId = inv['patient_id'] ?? '';
-                  final patientName = _getPatientName(patientId, patients);
-                  final issuedAt = inv['issued_at'] ?? '-';
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 14),
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      color: Colors.white,
-                      border: Border.all(color: color.withOpacity(.4)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withOpacity(.15),
-                          blurRadius: 12,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
+            /// 🔹 رأس الجدول
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: Colors.white.withOpacity(0.9),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.mainColor.withOpacity(0.1),
+                    blurRadius: 12,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      "المريض",
+                      style: GoogleFonts.poppins(),
+                      textAlign: TextAlign.center,
                     ),
-                    child: Row(
-                      children: [
-                        /// Patient
-                        Expanded(
-                          flex: 2,
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: color,
-                                child: const Icon(
-                                  Icons.receipt_long,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(child: Text(patientName)),
-                            ],
-                          ),
-                        ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      "المبلغ",
+                      style: GoogleFonts.poppins(),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      "الحالة",
+                      style: GoogleFonts.poppins(),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      "تاريخ الإصدار",
+                      style: GoogleFonts.poppins(),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      "الإجراءات",
+                      style: GoogleFonts.poppins(),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
-                        /// Balance
-                        Expanded(
-                          child: FutureBuilder<double>(
-                            future: _getBalance(inv['id'].toString()),
-                            builder: (_, balSnap) {
-                              if (!balSnap.hasData) return const Text('-');
-                              return Text(
-                                '${balSnap.data!.toStringAsFixed(2)} SYP',
-                              );
-                            },
-                          ),
-                        ),
+            const SizedBox(height: 10),
 
-                        /// Status
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            alignment: Alignment.center,
-                            margin: EdgeInsets.all(12.w),
-                            decoration: BoxDecoration(
-                              color: color.withOpacity(.15),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              status.toUpperCase(),
-                              style: TextStyle(
-                                color: color,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
+            Expanded(
+              child: Obx(() {
+                if (ctrl.isLoading.value) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                        /// Issued Date
-                        Expanded(
-                          child: Text(
-                            issuedAt.length > 10
-                                ? issuedAt.substring(0, 10)
-                                : issuedAt,
-                          ),
-                        ),
-
-                        /// Actions
-                        Expanded(
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: Icon(Icons.edit, color: color),
-                                onPressed: () async {
-                                  await _showInvoiceDetailsDialog(
-                                    context,
-                                    inv,
-                                    patientName,
-                                  );
-                                  await ctrl.reload();
-                                },
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.redAccent,
-                                ),
-                                onPressed: () async {
-                                  final confirm = await showDialog<bool>(
-                                    context: context,
-                                    builder: (ctx) => AlertDialog(
-                                      title: const Text('Delete Invoice?'),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(ctx, false),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(ctx, true),
-                                          child: const Text(
-                                            'Delete',
-                                            style: TextStyle(color: Colors.red),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                  if (confirm == true)
-                                    await ctrl.deleteInvoice(inv['id']);
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                if (ctrl.filteredInvoices.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'لا يوجد فواتير بعد',
+                      style: GoogleFonts.poppins(),
                     ),
                   );
-                },
-              );
-            }),
-          ),
-        ],
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.only(top: 10),
+                  itemCount: ctrl.filteredInvoices.length,
+                  itemBuilder: (_, i) {
+                    final inv = ctrl.filteredInvoices[i];
+                    final status = inv['status'] ?? 'pending';
+                    final color = _statusColor(status);
+                    final patientName = ctrl.getPatientName(
+                      inv['patient_id'] ?? '',
+                      ctrl.patients,
+                    );
+
+                    return GestureDetector(
+                      onTap: () async {
+                        await _showInvoiceDetailsDialog(
+                          context,
+                          inv,
+                          patientName,
+                        );
+                        await ctrl.reload();
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: Colors.white,
+                          border: Border.all(color: color.withOpacity(.4)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: color.withOpacity(.15),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            /// المريض
+                            Expanded(
+                              flex: 2,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor: color,
+                                    child: const Icon(
+                                      Icons.receipt_long,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      patientName,
+                                      style: GoogleFonts.poppins(),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            Expanded(
+                              child: FutureBuilder<double>(
+                                future: _getBalance(inv['id'].toString()),
+                                builder: (_, snap) {
+                                  if (!snap.hasData) {
+                                    return Text(
+                                      '-',
+                                      style: GoogleFonts.poppins(),
+                                      textAlign: TextAlign.center,
+                                    );
+                                  }
+                                  return Text(
+                                    '${snap.data!.toStringAsFixed(2)} ل.س',
+                                    style: GoogleFonts.poppins(),
+                                    textAlign: TextAlign.center,
+                                  );
+                                },
+                              ),
+                            ),
+
+                            /// الحالة
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 6,
+                                ),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: color.withOpacity(.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  _statusText(status),
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                    color: color,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 15.h),
+
+                            /// التاريخ
+                            Expanded(
+                              child: Text(
+                                intl.DateFormat(
+                                      'yyyy - MM - d  \n hh:mm a',
+                                      'ar',
+                                    )
+                                    .format(
+                                      DateTime.tryParse(
+                                            inv['issued_at'] ?? '',
+                                          ) ??
+                                          DateTime.now(),
+                                    )
+                                    .toString(),
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(),
+                              ),
+                            ),
+
+                            /// أزرار
+                            Expanded(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(Icons.edit, color: color),
+                                    onPressed: () async {
+                                      await _showInvoiceDetailsDialog(
+                                        context,
+                                        inv,
+                                        patientName,
+                                      );
+                                      await ctrl.reload();
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: () async {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (_) => AlertDialog(
+                                          title: Text(
+                                            'حذف الفاتورة؟',
+                                            style: GoogleFonts.poppins(),
+                                          ),
+                                          content: Text(
+                                            'هل أنت متأكد من الحذف؟',
+                                            style: GoogleFonts.poppins(),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, false),
+                                              child: Text(
+                                                'إلغاء',
+                                                style: GoogleFonts.poppins(),
+                                              ),
+                                            ),
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, true),
+                                              child: Text(
+                                                'حذف',
+                                                style: GoogleFonts.poppins(
+                                                  color: Colors.red,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+
+                                      if (confirm == true) {
+                                        await ctrl.deleteInvoice(inv['id']);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -293,17 +408,12 @@ class _InvoicesPageBodyState extends State<_InvoicesPageBody> {
   void _showNoPatientDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Create Invoice from Patient Profile'),
-        content: const Text(
-          'Please go to a patient\'s profile and use the "Invoice" button to create a new invoice.',
+      builder: (_) => AlertDialog(
+        title: Text('إنشاء فاتورة', style: GoogleFonts.poppins()),
+        content: Text(
+          'يرجى الدخول إلى ملف المريض وإنشاء الفاتورة من هناك.',
+          style: GoogleFonts.poppins(),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
-        ],
       ),
     );
   }

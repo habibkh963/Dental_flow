@@ -19,9 +19,23 @@ class AppointmentsController extends GetxController {
 
   Future<void> fetch({String? patientId}) async {
     loading.value = true;
-    appts.value = await DatabaseService.instance.getAppointments(
+
+    final result = await DatabaseService.instance.getAppointments(
       patientId: patientId,
     );
+
+    // 🔑 حوّلهم ل Maps عاديين
+    appts.value = result.map((e) => Map<String, dynamic>.from(e)).toList();
+
+    await Future.forEach(appts.value, (element) async {
+      final patient = await DatabaseService.instance.getPatientById(
+        element['patient_id'],
+      );
+
+      element['patient_name'] =
+          '${patient?['first_name']} ${patient?['last_name']}';
+    });
+
     log(appts.value.toString());
     loading.value = false;
   }

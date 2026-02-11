@@ -128,7 +128,7 @@ class NotificationTile extends StatelessWidget {
                   IconButton(
                     icon: Icon(Icons.check, color: color, size: 20.sp),
                     onPressed: onApprove,
-                    tooltip: 'Mark done',
+                    tooltip: 'منتهية',
                   ),
                 if (onCancel != null)
                   IconButton(
@@ -138,7 +138,7 @@ class NotificationTile extends StatelessWidget {
                       size: 20.sp,
                     ),
                     onPressed: onCancel,
-                    tooltip: 'Cancel',
+                    tooltip: 'الغاء',
                   ),
                 SizedBox(width: 6.w),
               ],
@@ -153,12 +153,12 @@ class NotificationTile extends StatelessWidget {
 String _statusLabel(AppointmentStatus status) {
   switch (status) {
     case AppointmentStatus.pending:
-      return 'PENDING';
+      return 'معلقة';
     case AppointmentStatus.approved:
-      return 'APPROVED';
+      return 'م,كدة';
     case AppointmentStatus.cancelled:
-      return 'CANCELLED';
+      return 'ملغية';
     case AppointmentStatus.done:
-      return 'DONE';
+      return 'تمت';
   }
 }

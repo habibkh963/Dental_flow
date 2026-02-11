@@ -99,7 +99,8 @@ class DatabaseService {
         patient_id TEXT,
         total REAL,
         status TEXT,
-        issued_at TEXT,
+        issued_at TEXT, 
+         type_of_treatment TEXT,
         FOREIGN KEY(patient_id) REFERENCES patients(id)
       );
     ''');
@@ -170,6 +171,21 @@ class DatabaseService {
       );
     ''');
 
+    // Inventory outputs (used/delivered items) - for daily inventory tracking
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS inventory_outputs (
+        id TEXT PRIMARY KEY,
+        item_id TEXT,
+        item_name TEXT,
+        quantity REAL,
+        unit TEXT,
+        price REAL,
+        date TEXT,
+        created_at TEXT,
+        FOREIGN KEY(item_id) REFERENCES inventory(id) ON DELETE SET NULL
+      );
+    ''');
+
     // Migration: ensure appointments table has 'materials_used' column (for older DBs)
     try {
       final cols = await db.rawQuery("PRAGMA table_info('appointments');");
@@ -182,7 +198,18 @@ class DatabaseService {
     } catch (_) {
       // ignore migration errors; table may not exist yet or PRAGMA unsupported
     }
-
+    // Migration: ensure inventory_outputs table has 'price' column (for older DBs)
+    try {
+      final cols = await db.rawQuery("PRAGMA table_info('inventory_outputs');");
+      final hasPrice = cols.any((c) => c['name'] == 'price');
+      if (!hasPrice) {
+        await db.execute(
+          'ALTER TABLE inventory_outputs ADD COLUMN price REAL DEFAULT 0.0;',
+        );
+      }
+    } catch (_) {
+      // ignore migration errors
+    }
     // Migration: ensure patients table has 'diseases' column (for older DBs)
     try {
       final cols = await db.rawQuery("PRAGMA table_info('patients');");
@@ -423,24 +450,80 @@ class DatabaseService {
   Future<String> addInvoice(Map<String, dynamic> invoice) async {
     final id = invoice['id'] ?? _uuid.v4();
     final now = DateTime.now().toIso8601String();
+
     final data = {
       'id': id,
       'patient_id': invoice['patient_id'],
       'total': invoice['total'] ?? 0.0,
-      'status': invoice['status'] ?? 'pending',
-      'issued_at': now,
+      'type_of_treatment': invoice['type_of_treatment'] ?? '',
+      'issued_at': invoice['issued_at'] ?? now,
     };
-    await db.insert('invoices', data);
-    return id;
+
+    final existing = await db.query(
+      'invoices',
+      where: 'patient_id = ?',
+      whereArgs: [invoice['patient_id']],
+      limit: 1,
+    );
+
+    if (existing.isNotEmpty) {
+      final invoiceHere = Map<String, dynamic>.from(existing.first);
+
+      final oldTotal = (invoiceHere['total'] as num?) ?? 0;
+      final newTotal = (invoice['total'] as num?) ?? 0;
+
+      invoiceHere['total'] = oldTotal + newTotal;
+      invoiceHere['type_of_treatment'] = invoice['type_of_treatment'];
+
+      await db.update(
+        'invoices',
+        invoiceHere,
+        where: 'id = ?',
+        whereArgs: [invoiceHere['id']],
+      );
+
+      return invoiceHere['id'];
+    } else {
+      // ✅ إضافة جديدة
+      await db.insert('invoices', data);
+      return id;
+    }
   }
 
-  Future<int> updateInvoice(String id, Map<String, dynamic> updates) async {
-    return await db.update(
+  // Future<String> addInvoice(Map<String, dynamic> invoice) async {
+  //   final id = invoice['id'] ?? _uuid.v4();
+  //   final now = DateTime.now().toIso8601String();
+  //   final data = {
+  //     'id': id,
+  //     'patient_id': invoice['patient_id'],
+  //     'total': invoice['total'] ?? 0.0,
+  //     'status': invoice['status'] ?? 'pending',
+  //     'issued_at': now,
+  //   };
+  //   await db.insert('invoices', data);
+  //   return id;
+  // }
+
+  // Future<int> updateInvoice(String id, Map<String, dynamic> updates) async {
+  //   return await db.update(
+  //     'invoices',
+  //     updates,
+  //     where: 'id = ?',
+  //     whereArgs: [id],
+  //   );
+  // }
+  Future<Map<String, dynamic>?> getInvoice(String id) async {
+    final result = await db.query(
       'invoices',
-      updates,
-      where: 'id = ?',
+      where: 'patient_id = ?',
       whereArgs: [id],
+      limit: 1,
     );
+
+    if (result.isNotEmpty) {
+      return result.first;
+    }
+    return null;
   }
 
   Future<int> deleteInvoice(String id) async {
@@ -479,10 +562,10 @@ class DatabaseService {
     final data = {
       'id': id,
       'invoice_id': line['invoice_id'],
-      'material_id': line['material_id'],
+      // 'material_id': line['material_id'],
       'description': line['description'] ?? '',
-      'quantity': quantity,
-      'unit_price': unitPrice,
+      // 'quantity': quantity,
+      // 'unit_price': unitPrice,
       'line_total': lineTotal,
     };
     await db.insert('invoice_lines', data);
@@ -602,7 +685,7 @@ class DatabaseService {
       'id': id,
       'invoice_id': payment['invoice_id'],
       'amount': payment['amount'] ?? 0.0,
-      'method': payment['method'] ?? 'cash',
+      'method': payment['method'] ?? 'نقدي',
       'note': payment['note'] ?? '',
       'paid_at': payment['paid_at'] ?? now,
     };
@@ -738,7 +821,7 @@ class DatabaseService {
 
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       final projectDir = await getApplicationSupportDirectory();
-
+      log(projectDir.path);
       dbFullPath = '${projectDir.path}/dental_clinic.db';
     } else {
       // موبايل
@@ -783,5 +866,44 @@ class DatabaseService {
     final rows = await db.query('patients', where: 'id = ?', whereArgs: [id]);
     if (rows.isEmpty) return null;
     return rows.first;
+  }
+
+  // Inventory Outputs (Daily Inventory Tracking)
+  Future<List<Map<String, dynamic>>> getInventoryOutputs() async {
+    return await db.query('inventory_outputs', orderBy: 'created_at DESC');
+  }
+
+  Future<String> addInventoryOutput(Map<String, dynamic> data) async {
+    final id = data['id'] ?? _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    final output = {
+      'id': id,
+      'item_id': data['item_id'] ?? '',
+      'item_name': data['item_name'] ?? '',
+      'quantity': data['quantity'] ?? 0.0,
+      'unit': data['unit'] ?? 'وحدة',
+      'price': data['price'] ?? 0.0,
+      'date': data['date'] ?? now,
+      'created_at': data['created_at'] ?? now,
+    };
+    await db.insert('inventory_outputs', output);
+    return id;
+  }
+
+  Future<int> deleteInventoryOutput(String id) async {
+    return await db.delete(
+      'inventory_outputs',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> clearInventoryOutputs() async {
+    await db.delete('inventory_outputs');
+  }
+
+  // Simplified getAllPayments if not already present
+  Future<List<Map<String, dynamic>>> getAllPaymentsForReport() async {
+    return await db.query('payments', orderBy: 'paid_at DESC');
   }
 }

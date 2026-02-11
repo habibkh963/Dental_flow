@@ -20,6 +20,7 @@ class DatabaseService {
   // New: payments and patient_files
   final List<Map<String, dynamic>> _payments = [];
   final List<Map<String, dynamic>> _patientFiles = [];
+  final List<Map<String, dynamic>> _inventoryOutputs = [];
 
   // Patients CRUD
   Future<List<Map<String, dynamic>>> getPatients() async {
@@ -306,5 +307,48 @@ class DatabaseService {
     } catch (_) {
       return null;
     }
+  }
+
+  // Inventory Outputs (Daily Inventory Tracking)
+  Future<List<Map<String, dynamic>>> getInventoryOutputs() async {
+    return List<Map<String, dynamic>>.from(
+      _inventoryOutputs..sort(
+        (a, b) => ('${b['created_at']}').compareTo('${a['created_at']}'),
+      ),
+    );
+  }
+
+  Future<String> addInventoryOutput(Map<String, dynamic> data) async {
+    final id = data['id'] ?? _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    final output = {
+      'id': id,
+      'item_id': data['item_id'] ?? '',
+      'item_name': data['item_name'] ?? '',
+      'quantity': data['quantity'] ?? 0.0,
+      'unit': data['unit'] ?? 'وحدة',
+      'price': data['price'] ?? 0.0,
+      'date': data['date'] ?? now,
+      'created_at': data['created_at'] ?? now,
+    };
+    _inventoryOutputs.add(output);
+    return id;
+  }
+
+  Future<int> deleteInventoryOutput(String id) async {
+    final before = _inventoryOutputs.length;
+    _inventoryOutputs.removeWhere((e) => e['id'] == id);
+    return before - _inventoryOutputs.length;
+  }
+
+  Future<void> clearInventoryOutputs() async {
+    _inventoryOutputs.clear();
+  }
+
+  Future<List<Map<String, dynamic>>> getAllPayments() async {
+    return List<Map<String, dynamic>>.from(
+      _payments
+        ..sort((a, b) => ('${b['paid_at']}').compareTo('${a['paid_at']}')),
+    );
   }
 }

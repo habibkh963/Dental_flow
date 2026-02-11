@@ -1,7 +1,5 @@
 import 'package:dental_managment_system/features/inventory_manage/views/functions/show_edit_dialog.dart';
 import 'package:flutter/material.dart';
-
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -32,13 +30,33 @@ class InventoryPage extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  "Inventory",
+                  "المخزون",
                   style: GoogleFonts.poppins(
                     fontSize: 24,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                SizedBox(width: 20),
+                Expanded(
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintStyle: GoogleFonts.poppins(
+                        color: AppColors.mainColor,
+                      ),
+
+                      hintText: 'ابحث عن اسم المنتج...',
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: AppColors.mainColor,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      controller.filterInventory(value); // تابع الفلترة
+                    },
+                  ),
+                ),
                 const Spacer(),
+
                 FilledButton.icon(
                   onPressed: () => showAddDialog(
                     controller: controller,
@@ -51,10 +69,10 @@ class InventoryPage extends StatelessWidget {
                       horizontal: 20,
                       vertical: 14,
                     ),
-                    backgroundColor: const Color(0xFF2A9D8F),
+                    backgroundColor: AppColors.mainColor,
                   ),
                   icon: const Icon(Icons.add),
-                  label: const Text('New Inventory'),
+                  label: Text('اضافة عنصر', style: GoogleFonts.poppins()),
                 ),
               ],
             ),
@@ -68,19 +86,49 @@ class InventoryPage extends StatelessWidget {
                 color: Colors.white.withOpacity(0.9),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2A9D8F).withOpacity(0.1),
+                    color: AppColors.mainColor.withOpacity(0.1),
                     blurRadius: 12,
                   ),
                 ],
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Expanded(child: Text("name")),
-                  Expanded(child: Text("QTY")),
-                  Expanded(child: Text("MIN")),
+                  Expanded(
+                    child: Text(
+                      "الاسم",
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      "الكمية",
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      "الحد الأدنى",
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(),
+                    ),
+                  ),
 
-                  Expanded(child: Text("Status")),
-                  Expanded(child: Text("Actions")),
+                  Expanded(
+                    child: Text(
+                      "الحالة",
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      "الاجراءات",
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -90,20 +138,20 @@ class InventoryPage extends StatelessWidget {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (controller.items.isEmpty) {
-                  return const Center(
+                if (controller.filteredInventory.isEmpty) {
+                  return Center(
                     child: Text(
                       'لا يوجد عناصر في المخزون',
-                      style: TextStyle(fontSize: 18),
+                      style: GoogleFonts.poppins(fontSize: 18),
                     ),
                   );
                 }
 
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: controller.items.length,
+                  itemCount: controller.filteredInventory.length,
                   itemBuilder: (_, i) {
-                    final item = controller.items[i];
+                    final item = controller.filteredInventory[i];
                     final int qty = item['qty'];
                     final int threshold = item['threshold'];
 
@@ -143,9 +191,10 @@ class InventoryPage extends StatelessWidget {
                                 Expanded(
                                   child: Text(
                                     item['name'].toString(),
-                                    style: const TextStyle(
+                                    style: GoogleFonts.poppins(
                                       fontWeight: FontWeight.w600,
                                     ),
+                                    textAlign: TextAlign.center,
                                   ),
                                 ),
                               ],
@@ -153,10 +202,22 @@ class InventoryPage extends StatelessWidget {
                           ),
 
                           /// Quantity
-                          Expanded(child: Text(qty.toString())),
+                          Expanded(
+                            child: Text(
+                              qty.toString(),
+                              style: GoogleFonts.poppins(),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
 
                           /// Threshold
-                          Expanded(child: Text(threshold.toString())),
+                          Expanded(
+                            child: Text(
+                              threshold.toString(),
+                              style: GoogleFonts.poppins(),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
 
                           /// Status
                           Expanded(
@@ -172,10 +233,11 @@ class InventoryPage extends StatelessWidget {
                               ),
                               child: Text(
                                 qty <= threshold ? 'منخفض' : 'جيد',
-                                style: TextStyle(
+                                style: GoogleFonts.poppins(
                                   color: statusColor,
                                   fontWeight: FontWeight.w600,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                           ),
@@ -183,6 +245,7 @@ class InventoryPage extends StatelessWidget {
                           /// Actions
                           Expanded(
                             child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 IconButton(
                                   icon: Icon(

@@ -1,271 +1,284 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
-
 import 'package:dental_managment_system/services/database_service.dart';
+
+import '../../../../core/colors.dart';
+import '../../controller/profile_invoice.dart';
 
 Future<void> openInvoiceDialog(
   BuildContext context,
-  Map<String, dynamic> patient, {
-  String? invoiceId,
-}) async {
-  final descriptionC = TextEditingController();
-  final qtyC = TextEditingController(text: '1');
-  final priceC = TextEditingController(text: '0');
-  final payAmountC = TextEditingController(text: '0');
-  String payMethod = 'cash';
-
-  List<Map<String, dynamic>> lines = [];
-
-  double computeTotal() {
-    return lines.fold(0.0, (p, e) => p + (e['line_total'] as double));
-  }
-
-  // If editing existing invoice, load lines
-  if (invoiceId != null) {
-    final existingLines = await DatabaseService.instance.getInvoiceLines(
-      invoiceId,
-    );
-    lines = existingLines
-        .map(
-          (l) => {
-            'id': l['id'],
-            'description': l['description'],
-            'quantity': l['quantity'],
-            'unit_price': (l['unit_price'] as num).toDouble(),
-            'line_total': (l['line_total'] as num).toDouble(),
-          },
-        )
-        .toList();
-  }
-
+  Map<String, dynamic>? patient,
+) async {
+  final c = Get.put(InvoiceDialogController());
+  c.fetchPatients();
   await showDialog(
     context: context,
-    builder: (_) => StatefulBuilder(
-      builder: (ctx, setState) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          width: 700,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Invoice for ${patient['first_name'] ?? ''} ${patient['last_name'] ?? ''}',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+    builder: (_) => Dialog(
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        width: View.of(context).physicalSize.width * 0.6,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'فاتورة – ${patient == null ? '' : patient['first_name']} ${patient == null ? '' : patient['last_name']}',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
               ),
-              const SizedBox(height: 12),
-
-              // Add line inputs
+            ),
+            if (patient == null) ...[
+              const SizedBox(height: 20),
+              Text(
+                'طريقة البحث عن المريض',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
-                    flex: 4,
-                    child: TextField(
-                      controller: descriptionC,
-                      decoration: _dec('Description'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 80,
-                    child: TextField(
-                      controller: qtyC,
-                      decoration: _dec('Qty'),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 120,
-                    child: TextField(
-                      controller: priceC,
-                      decoration: _dec('Unit price'),
-                      keyboardType: TextInputType.numberWithOptions(
-                        decimal: true,
+                    child: Obx(
+                      () => ElevatedButton.icon(
+                        onPressed: () => c.inputMode.value = false,
+                        icon: Icon(
+                          Icons.list,
+                          color: c.inputMode.value
+                              ? AppColors.approvedColor
+                              : Colors.white,
+                        ),
+                        label: Text(
+                          'اختيار من القائمة',
+                          style: GoogleFonts.poppins(
+                            color: c.inputMode.value
+                                ? AppColors.approvedColor
+                                : Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: !c.inputMode.value
+                              ? AppColors.approvedColor
+                              : Colors.white,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2A9D8F),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Obx(
+                      () => ElevatedButton.icon(
+                        onPressed: () => c.inputMode.value = true,
+                        icon: Icon(
+                          Icons.edit,
+                          color: !c.inputMode.value
+                              ? AppColors.approvedColor
+                              : Colors.white,
+                        ),
+                        label: Text(
+                          'إدخال يدوي',
+                          style: GoogleFonts.poppins(
+                            color: !c.inputMode.value
+                                ? AppColors.approvedColor
+                                : Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: c.inputMode.value
+                              ? AppColors.approvedColor
+                              : Colors.white,
+                        ),
+                      ),
                     ),
-                    onPressed: () {
-                      final desc = descriptionC.text.trim();
-                      final qty = int.tryParse(qtyC.text.trim()) ?? 1;
-                      final price = double.tryParse(priceC.text.trim()) ?? 0.0;
-                      if (desc.isEmpty) return;
-                      final lt = qty * price;
-                      lines.add({
-                        'description': desc,
-                        'quantity': qty,
-                        'unit_price': price,
-                        'line_total': lt,
-                      });
-                      descriptionC.clear();
-                      qtyC.text = '1';
-                      priceC.text = '0';
-                      setState(() {});
-                    },
-                    child: const Icon(Icons.add),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-
-              // Lines list
-              if (lines.isNotEmpty)
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 260),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: lines.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final l = lines[i];
-                      return ListTile(
-                        title: Text(l['description']),
-                        subtitle: Text('${l['quantity']} x ${l['unit_price']}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              (l['line_total'] as double).toStringAsFixed(2),
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.red,
-                              ),
-                              onPressed: () {
-                                lines.removeAt(i);
-                                setState(() {});
-                              },
-                            ),
-                          ],
-                        ),
-                      );
+              const SizedBox(height: 15),
+              Obx(() {
+                if (c.inputMode.value) {
+                  return TextField(
+                    controller: c.patientNameController,
+                    decoration: _dec('اسم المريض (الاسم الأول والأخير)'),
+                  );
+                } else {
+                  return _PatientDropdown(
+                    patients: c.patients,
+                    selectedPatientId: c.pID.value,
+                    onChanged: (v) {
+                      c.pID.value = v!;
+                      c.fetchTreatment();
                     },
-                  ),
-                ),
+                  );
+                }
+              }),
+            ],
+            const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'اختيار نوع العلاج',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(height: 10),
 
-              const SizedBox(height: 12),
-              // Totals & payment
-              Row(
-                children: [
-                  Expanded(child: Container()),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('Subtotal: ${computeTotal().toStringAsFixed(2)}'),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 120,
-                            child: TextField(
-                              controller: payAmountC,
-                              decoration: _dec('Payment amount'),
-                              keyboardType: TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          DropdownButton<String>(
-                            value: payMethod,
-                            items: ['cash', 'card', 'transfer']
-                                .map(
-                                  (m) => DropdownMenuItem(
-                                    value: m,
-                                    child: Text(m),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) {
-                              if (v == null) return;
-                              payMethod = v;
-                              setState(() {});
-                            },
-                          ),
+            Obx(
+              () => Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: c.treatments.map((t) {
+                  final isSelected = c.selectedTreatment.contains(t['name']);
+
+                  return GestureDetector(
+                    onTap: () => c.selectTreatment(t),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 160,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF2A9D8F)
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black12, blurRadius: 6),
                         ],
                       ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Get.back(),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2A9D8F),
+                      child: Column(
+                        children: [
+                          Text(
+                            t['name'].toString(),
+                            style: GoogleFonts.poppins(
+                              color: isSelected ? Colors.white : Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                      ),
                     ),
-                    onPressed: () async {
-                      final total = computeTotal();
-                      // create invoice
-                      final invId =
-                          invoiceId ??
-                          await DatabaseService.instance.addInvoice({
-                            'patient_id': patient['id'],
-                            'total': total,
-                            'status': 'pending',
-                          });
-                      // add lines
-                      for (final l in lines) {
-                        await DatabaseService.instance.addInvoiceLine({
-                          'invoice_id': invId,
-                          'description': l['description'],
-                          'quantity': l['quantity'],
-                          'unit_price': l['unit_price'],
-                        });
-                      }
-                      // payment
-                      final payAmt =
-                          double.tryParse(payAmountC.text.trim()) ?? 0.0;
-                      if (payAmt > 0) {
-                        await DatabaseService.instance.addPayment({
-                          'invoice_id': invId,
-                          'amount': payAmt,
-                          'method': payMethod,
-                          'note': 'Payment from invoice dialog',
-                        });
-                      }
-                      // set status paid if balance <= 0
-                      final balance = await DatabaseService.instance
-                          .getInvoiceBalance(invId);
-                      if (balance <= 0) {
-                        await DatabaseService.instance.updateInvoice(invId, {
-                          'status': 'paid',
-                        });
-                      }
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Invoice saved')),
-                      );
-                      Get.back();
-                    },
-                    child: const Text('Save Invoice'),
-                  ),
-                ],
+                  );
+                }).toList(),
               ),
-            ],
-          ),
+            ),
+
+            const SizedBox(height: 20),
+
+            Row(
+              children: [
+                // Expanded(
+                //   child: TextField(
+                //     keyboardType: TextInputType.number,
+                //     decoration: _dec('Quantity'),
+                //     onChanged: (v) => c.qty.value = int.tryParse(v) ?? 1,
+                //   ),
+                // ),
+                // const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    // controller: TextEditingController(
+                    //   text: c.price.value.toString(),
+                    // ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: _dec('السعر'),
+                    onChanged: (v) => c.price.value = double.tryParse(v) ?? 0,
+                  ),
+                ),
+              ],
+            ),
+
+            // const SizedBox(height: 16),
+
+            // Row(
+            //   children: [
+            //     Expanded(
+            //       child: Obx(
+            //         () => Text(
+            //           'الكلي: ${c.total.toStringAsFixed(0)} SYP',
+            //           style: GoogleFonts.poppins(
+            //             fontWeight: FontWeight.bold,
+            //             fontSize: 16,
+            //           ),
+            //         ),
+            //       ),
+            //     ),
+            //     // Obx(
+            //     //   () => Row(
+            //     //     children: [
+            //     //       Checkbox(
+            //     //         value: c.isEstimated.value,
+            //     //         onChanged: (v) => c.isEstimated.value = v!,
+            //     //       ),
+            //     //       Text('Estimated', style: GoogleFonts.poppins()),
+            //     //     ],
+            //     //   ),
+            //     // ),
+            //   ],
+            // ),
+            const SizedBox(height: 12),
+
+            /// 💾 أزرار
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Get.back(),
+                  child: Text('الغاء', style: GoogleFonts.poppins()),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2A9D8F),
+                    padding: const EdgeInsets.symmetric(horizontal: 26),
+                  ),
+                  onPressed: () async {
+                    final patientId = patient == null
+                        ? (c.inputMode.value
+                              ? await c.getOrCreatePatient(
+                                  c.patientNameController.text,
+                                )
+                              : c.pID.value)
+                        : patient['id'];
+
+                    if (patientId == null || patientId.isEmpty) {
+                      Get.snackbar('خطأ', 'يجب اختيار أو إدخال اسم المريض');
+                      return;
+                    }
+
+                    log(
+                      {
+                        'type_of_treatment': c.treatmentTypeMethod.value,
+                        'patient_id': patientId,
+                        'total': c.total,
+                        'status': c.isEstimated.value ? 'estimated' : 'pending',
+                      }.toString(),
+                    );
+                    await DatabaseService.instance.addInvoice({
+                      'type_of_treatment': c.treatmentTypeMethod.value,
+                      'patient_id': patientId,
+                      'total': c.total,
+                      'status': c.isEstimated.value ? 'estimated' : 'pending',
+                    });
+
+                    Get.back();
+                    Get.snackbar(
+                      'نجح',
+                      'تم حفظ الفاتورة بنجاح',
+                      snackPosition: SnackPosition.BOTTOM,
+                    );
+                  },
+                  child: Text(
+                    'احفظ الفاتورة',
+                    style: GoogleFonts.poppins(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     ),
@@ -282,3 +295,50 @@ InputDecoration _dec(String hint) => InputDecoration(
     borderSide: BorderSide.none,
   ),
 );
+
+class _PatientDropdown extends StatelessWidget {
+  final List patients;
+  final String? selectedPatientId;
+  final ValueChanged<String?> onChanged;
+
+  const _PatientDropdown({
+    required this.patients,
+    required this.selectedPatientId,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    log('==> ${patients.toString()}');
+    return DropdownButtonFormField<String>(
+      value: selectedPatientId,
+      hint: Text("اختر المريض", style: GoogleFonts.poppins()),
+      decoration: _inputDecoration(),
+      items: patients
+          .map(
+            (p) => DropdownMenuItem<String>(
+              value: p['id'],
+              child: Text(
+                '${(p['first_name'] ?? '')}'
+                '${(p['last_name'] ?? '')}',
+                style: GoogleFonts.poppins(color: AppColors.approvedColor),
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+}
+
+InputDecoration _inputDecoration({String? hint}) {
+  return InputDecoration(
+    hintText: hint,
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+    ),
+  );
+}

@@ -229,7 +229,7 @@ class AppointmentDialog {
 
   static Widget _buildHeader(Map<String, dynamic>? existing) {
     return Text(
-      existing == null ? 'New Appointment' : 'Edit Appointment',
+      existing == null ? 'معاينة جديدة' : 'تعديل المعاينة',
       style: GoogleFonts.poppins(
         fontSize: 22,
         fontWeight: FontWeight.w700,
@@ -255,7 +255,7 @@ class _PatientDropdown extends StatelessWidget {
     log('==> ${patients.toString()}');
     return DropdownButtonFormField<String>(
       value: selectedPatientId,
-      hint: const Text("Select patient"),
+      hint: Text("اختر المريض", style: GoogleFonts.poppins()),
       decoration: _inputDecoration(),
       items: patients
           .map(
@@ -295,7 +295,7 @@ class _DateTimePickerRow extends StatelessWidget {
           child: _PickerButton(
             icon: Icons.calendar_today,
             label: selectedDate == null
-                ? "Pick date"
+                ? "اختر التاريخ"
                 : selectedDate.toString().split(" ").first,
             onPressed: () async {
               final picked = await showDatePicker(
@@ -313,7 +313,7 @@ class _DateTimePickerRow extends StatelessWidget {
           child: _PickerButton(
             icon: Icons.access_time,
             label: selectedTime == null
-                ? "Pick time"
+                ? "اختر الوقت"
                 : selectedTime!.format(context),
             onPressed: () async {
               final picked = await showTimePicker(
@@ -341,10 +341,19 @@ class _StatusDropdown extends StatelessWidget {
     return DropdownButtonFormField<String>(
       value: status,
       decoration: _inputDecoration(),
-      items: const [
-        DropdownMenuItem(value: 'scheduled', child: Text('Scheduled')),
-        DropdownMenuItem(value: 'completed', child: Text('Completed')),
-        DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
+      items: [
+        DropdownMenuItem(
+          value: 'scheduled',
+          child: Text('مجدولة', style: GoogleFonts.poppins()),
+        ),
+        DropdownMenuItem(
+          value: 'completed',
+          child: Text('مكتملة', style: GoogleFonts.poppins()),
+        ),
+        DropdownMenuItem(
+          value: 'cancelled',
+          child: Text('ملغية', style: GoogleFonts.poppins()),
+        ),
       ],
       onChanged: onChanged,
     );
@@ -361,7 +370,7 @@ class _NotesInput extends StatelessWidget {
     return TextField(
       controller: controller,
       maxLines: 3,
-      decoration: _inputDecoration(hint: "Notes..."),
+      decoration: _inputDecoration(hint: "الملاحظات..."),
     );
   }
 }
@@ -424,7 +433,7 @@ class _MaterialsDropdown extends StatelessWidget {
                 ),
               ),
               onPressed: onAdd,
-              child: const Text('Add'),
+              child: Text('اضافة', style: GoogleFonts.poppins()),
             ),
           ],
         ),
@@ -473,7 +482,7 @@ class _MaterialsList extends StatelessWidget {
                 (i) => i['id'] == material['material_id'],
                 orElse: () => <String, dynamic>{},
               );
-              final materialName = inventoryItem['name'] ?? 'Unknown';
+              final materialName = inventoryItem['name'] ?? 'غير معروف';
 
               return ListTile(
                 title: Text('$materialName x${material['quantity']}'),
@@ -501,7 +510,10 @@ class _ActionsRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        TextButton(onPressed: onCancel, child: const Text("Cancel")),
+        TextButton(
+          onPressed: onCancel,
+          child: Text("الغاء", style: GoogleFonts.poppins()),
+        ),
         const SizedBox(width: 16),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -514,7 +526,7 @@ class _ActionsRow extends StatelessWidget {
             ),
           ),
           onPressed: onSave,
-          child: const Text('Save'),
+          child: Text('حفظ', style: GoogleFonts.poppins()),
         ),
       ],
     );

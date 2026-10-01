@@ -74,7 +74,7 @@ class AppointmentNotificationCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isUpcoming ? Colors.orange : _getStatusColor(status)!,
+              color: isUpcoming ? Colors.orange : _getStatusColor(status),
               width: isUpcoming ? 2 : 1,
             ),
             color: isUpcoming
@@ -211,7 +211,7 @@ class AppointmentNotificationCard extends StatelessWidget {
               color: Colors.orange,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.access_time, size: 18, color: Colors.white),
+            child: const Icon(Icons.access_time, size: 16, color: Colors.white),
           ),
           const SizedBox(width: 12),
         ] else ...[
@@ -221,7 +221,7 @@ class AppointmentNotificationCard extends StatelessWidget {
               color: _getStatusColor(status),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.event, size: 18, color: Colors.white),
+            child: Icon(Icons.event, size: 16, color: Colors.white),
           ),
           const SizedBox(width: 12),
         ],
@@ -272,10 +272,11 @@ class AppointmentNotificationCard extends StatelessWidget {
           Chip(
             label: Text(status),
             backgroundColor: _getStatusColor(status),
-            labelStyle: const TextStyle(
+            shadowColor: _getStatusColor(status).withAlpha(150),
+            labelStyle: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
               color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
             ),
           ),
       ],
@@ -293,7 +294,7 @@ class AppointmentNotificationCard extends StatelessWidget {
       case 'rescheduled':
         return Colors.blue;
       default:
-        return Colors.grey;
+        return Colors.amber.shade600;
     }
   }
 }

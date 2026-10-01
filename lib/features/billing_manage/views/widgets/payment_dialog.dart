@@ -1,346 +1,270 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/colors.dart';
-import '../../../../services/database_service.dart';
+import '../../controllers/payment_dialog_controller.dart';
+import '../../utils/billing_input.dart';
+import 'billing_form_field.dart';
 
-Future<void> openPaymentDialog(
-  BuildContext context,
-  Map<String, dynamic> invoice,
-  String patientName,
-) async {
-  await showDialog(
-    context: context,
-
-    builder: (_) => _PaymentDialog(invoice: invoice, patientName: patientName),
-  );
-}
-
-class _PaymentDialog extends StatefulWidget {
-  final Map<String, dynamic> invoice;
-  final String patientName;
-
-  const _PaymentDialog({required this.invoice, required this.patientName});
+class PaymentDialog extends GetView<PaymentDialogController> {
+  const PaymentDialog({super.key});
 
   @override
-  State<_PaymentDialog> createState() => _PaymentDialogState();
-}
-
-class _PaymentDialogState extends State<_PaymentDialog> {
-  late Future<List<Map<String, dynamic>>> _linesFuture;
-  late Future<List<Map<String, dynamic>>> _paymentsFuture;
-  late Future<double> _balanceFuture;
-  late Future<List<Map<String, dynamic>>> _inventoryFuture;
-
-  final noteController = TextEditingController();
-
-  final priceC = TextEditingController();
-
-  String payMethod = 'نقدي';
-
-  @override
-  void initState() {
-    super.initState();
-    _reload();
-  }
-
-  void _reload() {
-    _linesFuture = DatabaseService.instance.getInvoiceLines(
-      widget.invoice['id'],
-    );
-    _paymentsFuture = DatabaseService.instance.getPayments(
-      widget.invoice['id'],
-    );
-    _balanceFuture = DatabaseService.instance.getInvoiceBalance(
-      widget.invoice['id'],
-    );
-    _inventoryFuture = DatabaseService.instance.getInventory();
-  }
+  String? get tag => PaymentDialogController.dialogTag;
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Directionality(
-        textDirection: TextDirection.rtl,
-        child: Container(
-          width: MediaQuery.widthOf(context) * 0.7,
+      child: Container(
+          width: MediaQuery.sizeOf(context).width * 0.55,
+          constraints: const BoxConstraints(maxWidth: 720),
           padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                /// العنوان
-                Text(
-                  'فاتورة المريض: ${widget.patientName}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.mainColor,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'رقم الفاتورة: ${widget.invoice['id']}',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
+          child: Obx(() {
+            if (controller.loading.value) {
+              return const SizedBox(
+                height: 200,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
 
-                const SizedBox(height: 20),
-
-                /// الإجمالي
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.mainColor.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'فاتورة المريض: ${controller.patientName}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.mainColor,
+                    ),
                   ),
-                  child: FutureBuilder<double>(
-                    future: _balanceFuture,
-                    builder: (_, snap) {
-                      if (!snap.hasData)
-                        return Text('-', style: GoogleFonts.poppins());
-                      final bal = snap.data!;
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'المبلغ المتبقي',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${bal.toStringAsFixed(2)} ل.س',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'رقم الفاتورة: ${controller.invoice.id}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  if (controller.invoice.typeOfTreatment.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'العلاج: ${controller.invoice.typeOfTreatment}',
+                      style: GoogleFonts.poppins(fontSize: 12),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  _BalanceSummary(controller: controller),
+                  const SizedBox(height: 24),
+                  if (controller.remainingBalance.value > 0) ...[
+                    Text(
+                      'إضافة دفعة',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: controller.amountController,
+                            decoration: billingFieldDecoration('المبلغ'),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[0-9.]'),
                               ),
                             ],
                           ),
-                          Icon(
-                            bal <= 0 ? Icons.check_circle : Icons.warning_amber,
-                            color: bal <= 0 ? Colors.green : Colors.orange,
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: controller.fillRemainingAmount,
+                          child: Text(
+                            'المتبقي كاملاً',
+                            style: GoogleFonts.poppins(fontSize: 12),
                           ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // /// المواد
-                // _sectionTitle('المواد المستخدمة'),
-                // _buildLines(),
-                const SizedBox(height: 24),
-                // _buildAddMaterial(),
-                _sectionTitle('إضافة دفعة'),
-                const SizedBox(height: 10),
-                _buildAddPayment(),
-                const SizedBox(height: 24),
-
-                SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.8,
-
-                  child: TextFormField(
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    maxLines: null,
-                    minLines: 20,
-                    controller: noteController,
-
-                    decoration: _dec('ملاحظة', isMulti: true),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.mainColor,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Obx(
+                      () => DropdownButtonFormField<String>(
+                        value: controller.payMethod.value,
+                        decoration: billingFieldDecoration('طريقة الدفع'),
+                        items: kPaymentMethods
+                            .map(
+                              (method) => DropdownMenuItem(
+                                value: method,
+                                child: Text(method, style: GoogleFonts.poppins()),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            controller.payMethod.value = value;
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: controller.noteController,
+                      maxLines: 3,
+                      decoration: billingFieldDecoration('ملاحظة (اختياري)'),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: Get.back,
+                          child: Text('إغلاق', style: GoogleFonts.poppins()),
+                        ),
+                        const SizedBox(width: 8),
+                        Obx(
+                          () => FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.mainColor,
+                            ),
+                            onPressed: controller.saving.value
+                                ? null
+                                : controller.submitPayment,
+                            child: controller.saving.value
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text('تسجيل الدفع', style: GoogleFonts.poppins()),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'تم سداد الفاتورة بالكامل',
+                        style: GoogleFonts.poppins(
+                          color: Colors.green.shade700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      onPressed: () async {
-                        final amt = double.tryParse(priceC.text.trim()) ?? 0.0;
-                        if (amt <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'أدخل مبلغ حقيقي',
-                                style: GoogleFonts.poppins(),
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                        await DatabaseService.instance.addPayment({
-                          'invoice_id': widget.invoice['id'],
-                          'amount': amt,
-                          'method': payMethod,
-                          'note': noteController.text,
-                        });
-                        priceC.clear();
-                        _reload();
-                        setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'تم تسجيل عملية الدفع',
-                              style: GoogleFonts.poppins(),
-                            ),
-                          ),
-                        );
-                      },
-                      child: Text('دفع ', style: GoogleFonts.poppins()),
                     ),
-                    TextButton(
-                      onPressed: () => Get.back(),
-                      child: Text('إغلاق', style: GoogleFonts.poppins()),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: Get.back,
+                        child: Text('إغلاق', style: GoogleFonts.poppins()),
+                      ),
                     ),
                   ],
-                ),
-
-                const SizedBox(height: 24),
-                _sectionTitle('الدفعات'),
-
-                _buildPayments(),
-
-                const SizedBox(height: 24),
-
-                /// إضافة دفعة
-                /// الدفعات
-              ],
-            ),
-          ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'الدفعات',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (controller.payments.isEmpty)
+                    Text(
+                      'لا يوجد دفعات بعد',
+                      style: GoogleFonts.poppins(color: Colors.grey),
+                    )
+                  else
+                    ...controller.payments.map(
+                      (payment) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          '${payment.amount.toStringAsFixed(2)} ل.س',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          '${payment.method} · ${DateFormat('dd/MM/yyyy HH:mm', 'ar').format(payment.paidAt)}${payment.note.isNotEmpty ? '\n${payment.note}' : ''}',
+                          style: GoogleFonts.poppins(fontSize: 12),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => controller.deletePayment(payment.id),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }),
         ),
+    );
+  }
+}
+
+class _BalanceSummary extends StatelessWidget {
+  const _BalanceSummary({required this.controller});
+
+  final PaymentDialogController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.mainColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          _summaryRow(
+            'إجمالي الفاتورة',
+            '${controller.totalAmount.value.toStringAsFixed(2)} ل.س',
+          ),
+          const SizedBox(height: 8),
+          _summaryRow(
+            'المبلغ المتبقي',
+            '${controller.remainingBalance.value.toStringAsFixed(2)} ل.س',
+            valueColor: controller.remainingBalance.value <= 0
+                ? Colors.green
+                : Colors.orange,
+          ),
+        ],
       ),
     );
   }
 
-  // ================== Widgets ==================
-
-  Widget _sectionTitle(String text) => Text(
-    text,
-    style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
-  );
-
-  Widget _buildLines() {
-    return FutureBuilder(
-      future: _linesFuture,
-      builder: (_, snap) {
-        if (!snap.hasData) return const CircularProgressIndicator();
-
-        final lines = snap.data as List;
-
-        if (lines.isEmpty) {
-          return Padding(
-            padding: EdgeInsets.all(12),
-            child: Text('لا توجد مواد مضافة', style: GoogleFonts.poppins()),
-          );
-        }
-
-        return Column(
-          children: lines.map((l) {
-            return ListTile(
-              title: Text(l['material_name'], style: GoogleFonts.poppins()),
-              subtitle: Text(
-                '${l['quantity']} × ${l['unit_price']} = ${l['line_total']}',
-                style: GoogleFonts.poppins(),
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: () async {
-                  await DatabaseService.instance.deleteInvoiceLine(l['id']);
-                  _reload();
-                  setState(() {});
-                },
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildPayments() {
-    return FutureBuilder(
-      future: _paymentsFuture,
-      builder: (_, snap) {
-        if (!snap.hasData) return const CircularProgressIndicator();
-        final list = snap.data as List;
-
-        if (list.isEmpty) {
-          return Text('لا يوجد دفعات بعد', style: GoogleFonts.poppins());
-        }
-
-        return Column(
-          children: list.map((p) {
-            return ListTile(
-              title: Text('${p['amount']} ل.س', style: GoogleFonts.poppins()),
-              subtitle: Text(p['method'], style: GoogleFonts.poppins()),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: () async {
-                  await DatabaseService.instance.deletePayment(p['id']);
-                  _reload();
-                  setState(() {});
-                },
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildAddPayment() {
+  Widget _summaryRow(String label, String value, {Color? valueColor}) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Expanded(
-          child: TextField(
-            controller: priceC,
-            decoration: _dec('المبلغ'),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            value: payMethod,
-            decoration: _dec('طريقة الدفع'),
-            items: [
-              DropdownMenuItem(
-                value: 'نقدي',
-                child: Text('نقدي', style: GoogleFonts.poppins()),
-              ),
-            ],
-            onChanged: (v) => setState(() => payMethod = v!),
+        Text(label, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: valueColor,
           ),
         ),
       ],
     );
   }
-
-  InputDecoration _dec(String hint, {bool isMulti = false}) => InputDecoration(
-    hintText: hint,
-    filled: true,
-    fillColor: Colors.white,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    constraints: isMulti ? BoxConstraints(maxHeight: 150.w) : null,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-  );
 }

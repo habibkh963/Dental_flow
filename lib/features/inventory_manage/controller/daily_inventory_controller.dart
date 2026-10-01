@@ -1,500 +1,322 @@
-import 'dart:developer';
-
-import 'package:flutter/rendering.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/colors.dart';
 import '../../../services/database_service.dart';
+import '../models/daily_financial_summary.dart';
+import '../utils/daily_inventory_calculations.dart';
+import '../utils/daily_inventory_date.dart';
+import '../views/widgets/inventory_output_dialog.dart';
+import 'inventory_output_dialog_controller.dart';
 
 class DailyInventoryController extends GetxController {
   final db = DatabaseService.instance;
 
-  var isLoading = false.obs;
-  var isIncomes = false.obs;
-  var todaySummary = <String, dynamic>{}.obs;
-  // Daily payments data
-  var dailyPayments = <DateTime, double>{}.obs;
-  var dailyPaymentsList = <Map<String, dynamic>>[].obs;
-  var _allPaymentsList = <Map<String, dynamic>>[]; // Store original data
+  final isLoading = false.obs;
+  final isIncomes = false.obs;
+  final isFilterActive = false.obs;
+  final showSummaryDetails = false.obs;
 
-  // Invoice summary (legacy - keeping for compatibility)
-  var totalInvoicesAmount = 0.0.obs;
-  var totalPaidAmount = 0.0.obs;
-  var totalUnpaidAmount = 0.0.obs;
+  final dailyPaymentsList = <Map<String, dynamic>>[].obs;
+  final filteredOutputs = <Map<String, dynamic>>[].obs;
+  final inventoryOutputs = <Map<String, dynamic>>[].obs;
 
-  // Daily and Monthly Summary
-  var dailyTotalInvoices = 0.0.obs;
-  var monthlyTotalInvoices = 0.0.obs;
-  var allTimeTotalInvoices = 0.0.obs;
-  var dailyPaidAmount = 0.0.obs;
-  var monthlyPaidAmount = 0.0.obs;
-  var allTimePaidAmount = 0.0.obs;
-  var dailyUnpaidAmount = 0.0.obs;
-  var monthlyUnpaidAmount = 0.0.obs;
-  var allTimeUnpaidAmount = 0.0.obs;
-  var dailyExpenses = 0.0.obs;
-  var monthlyExpenses = 0.0.obs;
-  var allTimeExpenses = 0.0.obs;
-  var dailyTotalPayments = 0.0.obs;
-  var monthlyTotalPayments = 0.0.obs;
-  var allTimeTotalPayments = 0.0.obs;
+  final periodFilterSummary = DailyPeriodFilterSummary.empty.obs;
+  final financialReport = Rxn<DailyFinancialReport>();
+  final selectedHistoryMonth = Rxn<DateTime>();
+  final historyMonths = <DateTime>[].obs;
 
-  // Inventory outputs (deliveries)
-  var inventoryOutputs = <Map<String, dynamic>>[].obs;
-  var filteredOutputs = <Map<String, dynamic>>[].obs;
-  var _allInventoryOutputs = <Map<String, dynamic>>[]; // Store original data
+  final selectedStartDate =
+      DateTime.now().subtract(const Duration(days: 30)).obs;
+  final selectedEndDate = DateTime.now().obs;
 
-  // Selected date range
-  var selectedStartDate = DateTime.now().subtract(Duration(days: 30)).obs;
-  var selectedEndDate = DateTime.now().obs;
+  List<Map<String, dynamic>> _allPaymentsList = [];
+  List<Map<String, dynamic>> _allInventoryOutputs = [];
+  List<Map<String, dynamic>> _rawInvoices = [];
+  List<Map<String, dynamic>> _rawPayments = [];
+
+  DailyFinancialSummary get daily => financialReport.value?.daily ?? DailyFinancialSummary.zero;
+  DailyFinancialSummary get monthly =>
+      financialReport.value?.monthly ?? DailyFinancialSummary.zero;
+  DailyFinancialSummary get allTime =>
+      financialReport.value?.allTime ?? DailyFinancialSummary.zero;
+
+  DailyFinancialSummary get displayedMonthSummary {
+    final selected = selectedHistoryMonth.value;
+    if (selected == null) return monthly;
+    return computeSummaryForMonth(
+      invoices: _rawInvoices,
+      payments: _rawPayments,
+      outputs: _allInventoryOutputs,
+      month: selected,
+    );
+  }
+
+  String get displayedMonthLabel {
+    final selected = selectedHistoryMonth.value;
+    if (selected == null) return 'شهري';
+    return formatMonthLabel(selected);
+  }
 
   @override
-  void onInit() async {
+  void onInit() {
     super.onInit();
-    await loadDailyData();
+    loadDailyData();
   }
 
   Future<void> loadDailyData() async {
     try {
       isLoading.value = true;
-
-      // Load all invoices and payments
-      final invoices = await db.getInvoices();
-
-      final payments = await db.getAllPayments();
-
-      await _calculateDailyPayments(payments);
+      _rawInvoices = await db.getInvoices();
+      _rawPayments = await db.getAllPayments();
+      _allPaymentsList = normalizePayments(_rawPayments);
       await _loadInventoryOutputs();
-      await _calculateInvoiceSummary(invoices, payments);
-    } catch (e) {
-      print('Error loading daily data: $e');
+      _recalculateSummaries();
+      _refreshHistoryMonths();
+      _resetListsToAll();
     } finally {
       isLoading.value = false;
     }
   }
 
-  _calculateInvoiceSummary(
-    List<Map<String, dynamic>> invoices,
-    List<Map<String, dynamic>> payments,
-  ) async {
-    double totalAmount = 0;
-    double paidAmount = 0;
+  @override
+  Future<void> refresh() => loadDailyData();
 
-    // Daily calculations
-    DateTime today = DateTime.now();
-    DateTime todayStart = DateTime(today.year, today.month, today.day);
-    DateTime todayEnd = DateTime(
-      today.year,
-      today.month,
-      today.day,
-      23,
-      59,
-      59,
+  void _recalculateSummaries() {
+    financialReport.value = computeFinancialReport(
+      invoices: _rawInvoices,
+      payments: _rawPayments,
+      outputs: _allInventoryOutputs,
     );
-
-    // Monthly calculations
-    DateTime monthStart = DateTime(today.year, today.month, 1);
-    DateTime monthEnd = today.month == 12
-        ? DateTime(today.year + 1, 1, 1).subtract(const Duration(days: 1))
-        : DateTime(
-            today.year,
-            today.month + 1,
-            1,
-          ).subtract(const Duration(days: 1));
-
-    double dailyInvoices = 0;
-    double monthlyInvoices = 0;
-    double dailyPaid = 0;
-    double monthlyPaid = 0;
-    double dailyUnpaid = 0;
-    double monthlyUnpaid = 0;
-
-    for (var invoice in invoices) {
-      final amount = (invoice['total'] as num?)?.toDouble() ?? 0.0;
-      final issuedDate = _parseDate(invoice['issued_at']);
-
-      totalAmount += amount;
-
-      // Check if invoice is daily or monthly
-      if (issuedDate != null) {
-        if (issuedDate.isAfter(todayStart) && issuedDate.isBefore(todayEnd)) {
-          dailyInvoices += amount;
-        }
-        if (!issuedDate.isBefore(monthStart) && !issuedDate.isAfter(monthEnd)) {
-          monthlyInvoices += amount;
-        }
-      }
-    }
-
-    for (var payment in payments) {
-      final amount = (payment['amount'] as num?)?.toDouble() ?? 0.0;
-      final paidDate = _parseDate(payment['paid_at'] ?? payment['date']);
-
-      paidAmount += amount;
-
-      // Check if payment is daily or monthly
-      if (paidDate != null) {
-        if (paidDate.isAfter(todayStart) && paidDate.isBefore(todayEnd)) {
-          dailyPaid += amount;
-        }
-        if (!paidDate.isBefore(monthStart) && !paidDate.isAfter(monthEnd)) {
-          monthlyPaid += amount;
-        }
-      }
-    }
-
-    dailyUnpaid = dailyInvoices - dailyPaid;
-    monthlyUnpaid = monthlyInvoices - monthlyPaid;
-
-    // Set all values
-    totalInvoicesAmount.value = totalAmount;
-    totalPaidAmount.value = paidAmount;
-    totalUnpaidAmount.value = totalAmount - paidAmount;
-
-    dailyTotalInvoices.value = dailyInvoices;
-    monthlyTotalInvoices.value = monthlyInvoices;
-    allTimeTotalInvoices.value = totalAmount;
-    dailyPaidAmount.value = dailyPaid;
-    monthlyPaidAmount.value = monthlyPaid;
-    allTimePaidAmount.value = paidAmount;
-    dailyUnpaidAmount.value = dailyUnpaid;
-    monthlyUnpaidAmount.value = monthlyUnpaid;
-    allTimeUnpaidAmount.value = totalAmount - paidAmount;
-
-    // Calculate daily and monthly expenses
-    _calculateDailyAndMonthlyExpenses();
-
-    // Calculate daily and monthly total payments
-    dailyTotalPayments.value = dailyPaymentsList.fold<double>(0, (
-      sum,
-      payment,
-    ) {
-      final paymentDate = payment['date'] as DateTime;
-      if (paymentDate.isAfter(todayStart) && paymentDate.isBefore(todayEnd)) {
-        return sum + (payment['amount'] as double? ?? 0.0);
-      }
-      return sum;
-    });
-    // dailyPaymentsList هون كل الدفعات اليومية، مش بس لليوم، عشان كده بنحسب منهم اللي يخص اليوم والشهر وكل الوقت
-    monthlyTotalPayments.value = dailyPaymentsList.fold<double>(0, (
-      sum,
-      payment,
-    ) {
-      final paymentDate = payment['date'] as DateTime;
-      if (!paymentDate.isBefore(monthStart) && !paymentDate.isAfter(monthEnd)) {
-        return sum + (payment['amount'] as double? ?? 0.0);
-      }
-      return sum;
-    });
-
-    allTimeTotalPayments.value = dailyPaymentsList.fold<double>(0, (
-      sum,
-      payment,
-    ) {
-      return sum + (payment['amount'] as double? ?? 0.0);
-    });
-
-    log('Invoice Summary Calculated: Total=${monthlyTotalPayments.value}, ');
-  }
-
-  void _calculateDailyAndMonthlyExpenses() {
-    DateTime today = DateTime.now();
-    DateTime todayStart = DateTime(today.year, today.month, today.day);
-    DateTime todayEnd = DateTime(
-      today.year,
-      today.month,
-      today.day,
-      23,
-      59,
-      59,
-    );
-
-    DateTime monthStart = DateTime(today.year, today.month, 1);
-    DateTime monthEnd = today.month == 12
-        ? DateTime(today.year + 1, 1, 1).subtract(const Duration(days: 1))
-        : DateTime(
-            today.year,
-            today.month + 1,
-            1,
-          ).subtract(const Duration(days: 1));
-
-    double daily = 0;
-    double monthly = 0;
-    double allTime = 0;
-
-    for (var output in inventoryOutputs) {
-      final price = (output['price'] as num?)?.toDouble() ?? 0.0;
-      final outputDate = _parseDate(output['date'] ?? output['created_at']);
-
-      allTime += price;
-
-      if (outputDate != null) {
-        if (outputDate.isAfter(todayStart) && outputDate.isBefore(todayEnd)) {
-          daily += price;
-        }
-        if (!outputDate.isBefore(monthStart) && !outputDate.isAfter(monthEnd)) {
-          monthly += price;
-        }
-      }
-    }
-
-    dailyExpenses.value = daily;
-    monthlyExpenses.value = monthly;
-    allTimeExpenses.value = allTime;
-  }
-
-  _calculateDailyPayments(List<Map<String, dynamic>> payments) async {
-    Map<DateTime, double> dailyMap = {};
-    List<Map<String, dynamic>> paymentList = [];
-
-    for (var payment in payments) {
-      final date = _parseDate(payment['paid_at'] ?? payment['date']);
-      if (date != null) {
-        final normalizedDate = DateTime(date.year, date.month, date.day);
-        final amount = (payment['amount'] as num?)?.toDouble() ?? 0.0;
-
-        dailyMap[normalizedDate] = (dailyMap[normalizedDate] ?? 0.0) + amount;
-
-        paymentList.add({
-          'date': date,
-          'amount': amount,
-          'patient_id': payment['patient_id'],
-          'invoice_id': payment['invoice_id'],
-          'payment_method': payment['method'] ?? 'نقدي',
-          'notes': payment['note'] ?? '',
-        });
-      }
-    }
-
-    // Sort by date descending
-    paymentList.sort((a, b) => (b['date'] as DateTime).compareTo(a['date']));
-
-    dailyPayments.assignAll(dailyMap);
-    dailyPaymentsList.assignAll(paymentList);
-    _allPaymentsList = List.from(paymentList); // Store original data
   }
 
   Future<void> _loadInventoryOutputs() async {
-    try {
-      // Get inventory items that have been used/delivered (outputs)
-      final outputs = await db.getInventoryOutputs();
-      inventoryOutputs.assignAll(outputs);
-      filteredOutputs.assignAll(outputs);
-      _allInventoryOutputs = List.from(outputs); // Store original data
-    } catch (e) {
-      print('Error loading inventory outputs: $e');
-    }
+    final outputs = await db.getInventoryOutputs();
+    inventoryOutputs.assignAll(outputs);
+    _allInventoryOutputs = List.from(outputs);
+    filteredOutputs.assignAll(outputs);
   }
 
-  void filterByDateRange(DateTime startDate, DateTime endDate) {
-    selectedStartDate.value = startDate;
-    selectedEndDate.value = endDate;
-
-    // Filter daily payments by date range from original data
-    final filtered = _allPaymentsList.where((payment) {
-      final paymentDate = payment['date'] as DateTime;
-      return !paymentDate.isBefore(startDate) && !paymentDate.isAfter(endDate);
-    }).toList();
-
-    dailyPaymentsList.assignAll(filtered);
-
-    // Filter inventory outputs from original data
-    final filteredInvOutputs = _allInventoryOutputs.where((output) {
-      final outputDate = _parseDate(output['date'] ?? output['created_at']);
-      if (outputDate == null) return false;
-      return !outputDate.isBefore(startDate) && !outputDate.isAfter(endDate);
-    }).toList();
-
-    filteredOutputs.assignAll(filteredInvOutputs);
+  void _refreshHistoryMonths() {
+    historyMonths.assignAll(
+      collectAvailableHistoryMonths(
+        invoices: _rawInvoices,
+        payments: _rawPayments,
+        outputs: _allInventoryOutputs,
+      ),
+    );
   }
 
-  void filterOutputsByName(String query) {
-    final q = query.trim().toLowerCase();
+  void selectHistoryMonth(DateTime month) {
+    final monthStart = startOfMonth(month);
+    selectedHistoryMonth.value = monthStart;
+    selectedStartDate.value = monthStart;
+    selectedEndDate.value = endOfMonth(monthStart);
+    _applyCurrentFilter();
+  }
 
-    if (q.isEmpty) {
-      filteredOutputs.assignAll(inventoryOutputs);
+  void toggleSummaryDetails() =>
+      showSummaryDetails.value = !showSummaryDetails.value;
+
+  void applyDateFilter() {
+    final range = normalizeRange(
+      selectedStartDate.value,
+      selectedEndDate.value,
+    );
+    selectedStartDate.value = range.$1;
+    selectedEndDate.value = range.$2;
+    _syncSelectedHistoryMonth();
+    _applyCurrentFilter();
+  }
+
+  void resetDateFilter() {
+    selectedStartDate.value =
+        DateTime.now().subtract(const Duration(days: 30));
+    selectedEndDate.value = DateTime.now();
+    selectedHistoryMonth.value = null;
+    isFilterActive.value = false;
+    _resetListsToAll();
+  }
+
+  void _syncSelectedHistoryMonth() {
+    final range = normalizeRange(
+      selectedStartDate.value,
+      selectedEndDate.value,
+    );
+    final monthStart = startOfMonth(range.$1);
+    final monthEnd = endOfMonth(monthStart);
+    if (isSameDay(range.$1, monthStart) && isSameDay(range.$2, monthEnd)) {
+      selectedHistoryMonth.value = monthStart;
     } else {
-      filteredOutputs.assignAll(
-        inventoryOutputs.where((output) {
-          final name = (output['item_name'] ?? '').toString().toLowerCase();
-          return name.contains(q);
-        }).toList(),
-      );
+      selectedHistoryMonth.value = null;
     }
+  }
+
+  void _resetListsToAll() {
+    dailyPaymentsList.assignAll(_allPaymentsList);
+    filteredOutputs.assignAll(_allInventoryOutputs);
+    periodFilterSummary.value = DailyPeriodFilterSummary.empty;
+  }
+
+  void _applyCurrentFilter({bool silent = false}) {
+    if (!silent) {
+      isFilterActive.value = true;
+    }
+
+    dailyPaymentsList.assignAll(
+      filterByDateRange(
+        items: _allPaymentsList,
+        start: selectedStartDate.value,
+        end: selectedEndDate.value,
+        dateSelector: (item) => item['date'] as DateTime?,
+      ),
+    );
+
+    filteredOutputs.assignAll(
+      filterByDateRange(
+        items: _allInventoryOutputs,
+        start: selectedStartDate.value,
+        end: selectedEndDate.value,
+        dateSelector: (item) =>
+            parseRecordDate(item['date'] ?? item['created_at']),
+      ),
+    );
+
+    periodFilterSummary.value = computePeriodFilterSummary(
+      payments: _allPaymentsList,
+      outputs: _allInventoryOutputs,
+      start: selectedStartDate.value,
+      end: selectedEndDate.value,
+    );
   }
 
   Future<void> finalizeInventory() async {
     try {
       isLoading.value = true;
-      // Clear outputs after finalization
       await db.clearInventoryOutputs();
       inventoryOutputs.clear();
       filteredOutputs.clear();
-    } catch (e) {
-      print('Error finalizing inventory: $e');
+      _allInventoryOutputs = [];
+      _recalculateSummaries();
+      _refreshFilteredLists();
     } finally {
       isLoading.value = false;
     }
   }
 
-  Future<void> addInventoryOutput(Map<String, dynamic> data) async {
-    try {
-      await db.addInventoryOutput(data);
-      await _loadInventoryOutputs();
-      _calculateDailyAndMonthlyExpenses();
-    } catch (e) {
-      print('Error adding inventory output: $e');
+  void _refreshFilteredLists() {
+    if (isFilterActive.value) {
+      _applyCurrentFilter();
+    } else {
+      _resetListsToAll();
     }
+  }
+
+  void showAddOutputDialog() {
+    final tag = InventoryOutputDialogController.dialogTag;
+    if (Get.isRegistered<InventoryOutputDialogController>(tag: tag)) {
+      Get.delete<InventoryOutputDialogController>(tag: tag);
+    }
+
+    final dialogController = Get.put(
+      InventoryOutputDialogController(this),
+      tag: tag,
+    );
+
+    final context = Get.context;
+    if (context == null) {
+      Get.delete<InventoryOutputDialogController>(tag: tag);
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => InventoryOutputDialog(
+        dialogController: dialogController,
+      ),
+    ).whenComplete(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (Get.isRegistered<InventoryOutputDialogController>(tag: tag)) {
+          Get.delete<InventoryOutputDialogController>(tag: tag);
+        }
+      });
+    });
+  }
+
+  Future<void> showFinalizeDialog() async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        title: Text(
+          'الجرد النهائي',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          'هل أنت متأكد؟ سيتم حذف جميع المخرجات المسجلة وإعادة حساب النفقات.',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('إلغاء', style: GoogleFonts.poppins()),
+          ),
+          FilledButton(
+            onPressed: () => Get.back(result: true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+            child: Text('تأكيد', style: GoogleFonts.poppins()),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await finalizeInventory();
+    }
+  }
+
+  Future<void> confirmDeleteOutput(String id, String itemName) async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        title: Text('حذف المخرج؟', style: GoogleFonts.poppins()),
+        content: Text(
+          'هل تريد حذف "$itemName" من سجل المخرجات؟',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('إلغاء', style: GoogleFonts.poppins()),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: true),
+            child: Text(
+              'حذف',
+              style: GoogleFonts.poppins(color: AppColors.cancelledColor),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await removeInventoryOutput(id);
+    }
+  }
+
+  Future<void> addInventoryOutput(Map<String, dynamic> data) async {
+    await db.addInventoryOutput(data);
+    await _loadInventoryOutputs();
+    _recalculateSummaries();
+    _refreshFilteredLists();
   }
 
   Future<void> removeInventoryOutput(String id) async {
-    try {
-      await db.deleteInventoryOutput(id);
-      await _loadInventoryOutputs();
-      _calculateDailyAndMonthlyExpenses();
-    } catch (e) {
-      print('Error removing inventory output: $e');
-    }
+    await db.deleteInventoryOutput(id);
+    await _loadInventoryOutputs();
+    _recalculateSummaries();
+    _refreshFilteredLists();
   }
 
-  DateTime? _parseDate(dynamic dateValue) {
-    if (dateValue == null) return null;
-
-    if (dateValue is DateTime) return dateValue;
-
-    if (dateValue is String) {
-      try {
-        return DateTime.parse(dateValue);
-      } catch (_) {
-        return null;
-      }
-    }
-
-    return null;
-  }
-
-  // Public version for widgets
-  DateTime? parseDate(dynamic dateValue) => _parseDate(dateValue);
-
-  String formatDate(DateTime date) {
-    return DateFormat('yyyy-MM-dd', 'ar_SA').format(date);
-  }
-
-  String formatDateWithTime(DateTime date) {
-    return DateFormat('yyyy-MM-dd HH:mm', 'ar_SA').format(date);
-  }
-
-  double getDailyPaymentTotal(DateTime date) {
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    return dailyPayments[normalizedDate] ?? 0.0;
-  }
-
-  int getTotalOutputCount() => inventoryOutputs.length;
-
-  /// احصل على ملخص اليوم - الدخل والخرج
-  /// Get today's summary - income and expenses
-  Future getTodaySummary() async {
-    final today = DateTime.now();
-    final normalizedToday = DateTime(today.year, today.month, today.day);
-
-    // احسب الدفعات لليوم
-    double todayIncome = 0.0;
-    int todayPaymentsCount = 0;
-
-    for (var payment in dailyPaymentsList) {
-      final paymentDate = payment['date'] as DateTime;
-      final normalizedPaymentDate = DateTime(
-        paymentDate.year,
-        paymentDate.month,
-        paymentDate.day,
-      );
-      if (normalizedPaymentDate == normalizedToday) {
-        todayIncome += (payment['amount'] as double);
-        todayPaymentsCount++;
-      }
-    }
-
-    // احسب المخرجات لليوم
-    double todayExpense = 0.0;
-    int todayOutputsCount = 0;
-
-    for (var output in inventoryOutputs) {
-      final outputDate = parseDate(output['date'] ?? output['created_at']);
-      if (outputDate != null) {
-        final normalizedOutputDate = DateTime(
-          outputDate.year,
-          outputDate.month,
-          outputDate.day,
-        );
-        if (normalizedOutputDate == normalizedToday) {
-          // احسب قيمة المخرج بناءً على الكمية (إن وجدت سعر)
-          final quantity = (output['quantity'] as num?)?.toDouble() ?? 0.0;
-          todayExpense += quantity;
-          todayOutputsCount++;
-        }
-      }
-    }
-
-    todaySummary.value = {
-      'date': DateFormat('EEEE, d MMMM yyyy', 'ar_SA').format(today),
-      'income': todayIncome,
-      'expense': todayExpense,
-      'balance': todayIncome - todayExpense,
-      'paymentsCount': todayPaymentsCount,
-      'outputsCount': todayOutputsCount,
-    };
-  }
-
-  /// احصل على الدفعات لليوم فقط
-  /// Get today's payments only
-  List<Map<String, dynamic>> getTodayPayments() {
-    final today = DateTime.now();
-    final normalizedToday = DateTime(today.year, today.month, today.day);
-
-    return dailyPaymentsList.where((payment) {
-      final paymentDate = payment['date'] as DateTime;
-      final normalizedPaymentDate = DateTime(
-        paymentDate.year,
-        paymentDate.month,
-        paymentDate.day,
-      );
-      return normalizedPaymentDate == normalizedToday;
-    }).toList();
-  }
-
-  /// احصل على المخرجات لليوم فقط
-  /// Get today's outputs only
-  List<Map<String, dynamic>> getTodayOutputs() {
-    final today = DateTime.now();
-    final normalizedToday = DateTime(today.year, today.month, today.day);
-
-    return inventoryOutputs.where((output) {
-      final outputDate = parseDate(output['date'] ?? output['created_at']);
-      if (outputDate == null) return false;
-      final normalizedOutputDate = DateTime(
-        outputDate.year,
-        outputDate.month,
-        outputDate.day,
-      );
-      return normalizedOutputDate == normalizedToday;
-    }).toList();
-  }
-
-  /// احصل على مجموع الدفعات لليوم
-  /// Get total income for today
-  double getTodayIncome() {
-    return getTodayPayments().fold<double>(
-      0.0,
-      (sum, payment) => sum + (payment['amount'] as double),
-    );
-  }
-
-  /// احصل على مجموع المخرجات لليوم (بالكمية)
-  /// Get total outputs for today
-  double getTodayExpense() {
-    return getTodayOutputs().fold<double>(
-      0.0,
-      (sum, output) => sum + ((output['quantity'] as num?)?.toDouble() ?? 0.0),
-    );
-  }
+  DateTime? parseDate(dynamic dateValue) => parseRecordDate(dateValue);
 }

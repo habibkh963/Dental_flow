@@ -1,4 +1,5 @@
 import 'package:dental_managment_system/services/database/database_service_io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -21,9 +22,9 @@ class DashBoardController extends GetxController {
   // Notification state
   RxBool hasUrgentAppointments = false.obs;
   RxBool hasLowStock = false.obs;
+  final showFinanceDetails = false.obs;
 
   // 💰 الأرباح والإيرادات الشهرية
-  RxDouble monthlyProfit = 0.0.obs;
   RxDouble monthlyNetProfit = 0.0.obs;
   RxDouble monthlyPaid = 0.0.obs;
 
@@ -95,7 +96,7 @@ class DashBoardController extends GetxController {
         );
       } catch (_) {}
     } catch (e) {
-      print('Error parsing time string "$timeStr": $e');
+      debugPrint('Error parsing time string "$timeStr": $e');
     }
 
     return null;
@@ -107,6 +108,12 @@ class DashBoardController extends GetxController {
     _notificationTimer.cancel();
     super.onClose();
   }
+
+  void toggleFinanceDetails() =>
+      showFinanceDetails.value = !showFinanceDetails.value;
+
+  @override
+  Future<void> refresh() => loadStats();
 
   Future<void> loadStats() async {
     try {
@@ -139,7 +146,7 @@ class DashBoardController extends GetxController {
       _cleanupNotified(todayAppts);
       _notifyUpcomingAppointments(todayAppts);
     } catch (e) {
-      print('Error loading stats: $e');
+      debugPrint('Error loading stats: $e');
     } finally {
       isLoading.value = false;
     }
@@ -151,21 +158,6 @@ class DashBoardController extends GetxController {
       final now = DateTime.now();
       final startOfMonth = DateTime(now.year, now.month, 1);
       final endOfMonth = DateTime(now.year, now.month + 1, 0);
-
-      // الحصول على جميع الفواتير للشهر الحالي (pending أو estimated)
-      final invoices = await db.db.query(
-        'invoices',
-        where: 'issued_at >= ? AND issued_at <= ?',
-        whereArgs: [
-          startOfMonth.toIso8601String(),
-          endOfMonth.toIso8601String(),
-        ],
-      );
-
-      double totalRevenue = 0;
-      for (var invoice in invoices) {
-        totalRevenue += (invoice['total'] as num?)?.toDouble() ?? 0;
-      }
 
       // الحصول على جميع المدفوعات للشهر الحالي
       final payments = await db.db.query(
@@ -195,18 +187,13 @@ class DashBoardController extends GetxController {
           totalCosts += (output['price'] as num?)?.toDouble() ?? 0;
         }
       } catch (e) {
-        print('Error calculating costs: $e');
+        debugPrint('Error calculating costs: $e');
       }
 
-      // التحديث
-      // monthlyProfit = المبالغ المدفوعة (الربح الشهري)
-      // monthlyPaid = المبالغ المدفوعة
-      // monthlyNetProfit = المبالغ المدفوعة - المخرجات (صافي الربح)
-      monthlyProfit.value = totalPaid;
       monthlyPaid.value = totalPaid;
       monthlyNetProfit.value = totalPaid - totalCosts;
     } catch (e) {
-      print('Error calculating monthly stats: $e');
+      debugPrint('Error calculating monthly stats: $e');
     }
   }
 
@@ -222,7 +209,7 @@ class DashBoardController extends GetxController {
           return true;
         }
       } catch (e) {
-        print('Error parsing appointment time: $e');
+        debugPrint('Error parsing appointment time: $e');
       }
     }
     return false;
@@ -283,7 +270,7 @@ class DashBoardController extends GetxController {
           _notifiedAppointmentIds.add(id);
         }
       } catch (e) {
-        print('Error checking appointment for notification: $e');
+        debugPrint('Error checking appointment for notification: $e');
       }
     }
   }
@@ -295,7 +282,7 @@ class DashBoardController extends GetxController {
       _cleanupNotified(appts);
       _notifyUpcomingAppointments(appts, threshold: const Duration(minutes: 7));
     } catch (e) {
-      print('Error during background notify check: $e');
+      debugPrint('Error during background notify check: $e');
     }
   }
 
@@ -349,7 +336,7 @@ class DashBoardController extends GetxController {
       );
     } catch (e) {
       // fallback to snackbar if notifications fail
-      print('Local notification failed: $e');
+      debugPrint('Local notification failed: $e');
     }
   }
 
@@ -363,7 +350,7 @@ class DashBoardController extends GetxController {
       final dt = DateTime(0, 0, 0, hour, minute);
       return TimeOfDay.fromDateTime(dt).format(Get.context!);
     } catch (_) {
-      return timeStr ?? '--:--';
+      return timeStr;
     }
   }
 }

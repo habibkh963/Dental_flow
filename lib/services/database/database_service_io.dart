@@ -150,7 +150,8 @@ class DatabaseService {
         id TEXT PRIMARY KEY,
         name TEXT,
         qty INTEGER,
-        threshold INTEGER
+        threshold INTEGER,
+        unit TEXT
       );
     ''');
 
@@ -228,6 +229,19 @@ class DatabaseService {
       if (!hasMaterialId) {
         await db.execute(
           'ALTER TABLE invoice_lines ADD COLUMN material_id TEXT;',
+        );
+      }
+    } catch (_) {
+      // ignore migration errors
+    }
+
+    // Migration: ensure inventory table has 'unit' column (for older DBs)
+    try {
+      final cols = await db.rawQuery("PRAGMA table_info('inventory');");
+      final hasUnit = cols.any((c) => c['name'] == 'unit');
+      if (!hasUnit) {
+        await db.execute(
+          "ALTER TABLE inventory ADD COLUMN unit TEXT DEFAULT 'وحدة';",
         );
       }
     } catch (_) {
@@ -347,10 +361,10 @@ class DatabaseService {
   }
 
   Future<int> countLowStock({int threshold = 5}) async {
-    final res = await db.rawQuery(
-      'SELECT COUNT(*) as c FROM inventory WHERE qty <= ?',
-      [threshold],
-    );
+    final res = await db.rawQuery('''
+      SELECT COUNT(*) as c FROM inventory
+      WHERE qty <= 0 OR qty <= COALESCE(threshold, ?)
+    ''', [threshold]);
     return (res.first['c'] as int?) ?? 0;
   }
 
@@ -366,6 +380,7 @@ class DatabaseService {
       'name': item['name'] ?? '',
       'qty': item['qty'] ?? 0,
       'threshold': item['threshold'] ?? 0,
+      'unit': item['unit'] ?? 'وحدة',
     };
     await db.insert('inventory', data);
     return id;
@@ -455,39 +470,22 @@ class DatabaseService {
       'id': id,
       'patient_id': invoice['patient_id'],
       'total': invoice['total'] ?? 0.0,
+      'status': invoice['status'] ?? 'pending',
       'type_of_treatment': invoice['type_of_treatment'] ?? '',
       'issued_at': invoice['issued_at'] ?? now,
     };
 
-    final existing = await db.query(
+    await db.insert('invoices', data);
+    return id;
+  }
+
+  Future<int> updateInvoice(String id, Map<String, dynamic> updates) async {
+    return await db.update(
       'invoices',
-      where: 'patient_id = ?',
-      whereArgs: [invoice['patient_id']],
-      limit: 1,
+      updates,
+      where: 'id = ?',
+      whereArgs: [id],
     );
-
-    if (existing.isNotEmpty) {
-      final invoiceHere = Map<String, dynamic>.from(existing.first);
-
-      final oldTotal = (invoiceHere['total'] as num?) ?? 0;
-      final newTotal = (invoice['total'] as num?) ?? 0;
-
-      invoiceHere['total'] = oldTotal + newTotal;
-      invoiceHere['type_of_treatment'] = invoice['type_of_treatment'];
-
-      await db.update(
-        'invoices',
-        invoiceHere,
-        where: 'id = ?',
-        whereArgs: [invoiceHere['id']],
-      );
-
-      return invoiceHere['id'];
-    } else {
-      // ✅ إضافة جديدة
-      await db.insert('invoices', data);
-      return id;
-    }
   }
 
   // Future<String> addInvoice(Map<String, dynamic> invoice) async {
@@ -515,8 +513,25 @@ class DatabaseService {
   Future<Map<String, dynamic>?> getInvoice(String id) async {
     final result = await db.query(
       'invoices',
-      where: 'patient_id = ?',
+      where: 'id = ?',
       whereArgs: [id],
+      limit: 1,
+    );
+
+    if (result.isNotEmpty) {
+      return result.first;
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> getLatestInvoiceByPatientId(
+    String patientId,
+  ) async {
+    final result = await db.query(
+      'invoices',
+      where: 'patient_id = ?',
+      whereArgs: [patientId],
+      orderBy: 'issued_at DESC',
       limit: 1,
     );
 
@@ -562,10 +577,10 @@ class DatabaseService {
     final data = {
       'id': id,
       'invoice_id': line['invoice_id'],
-      // 'material_id': line['material_id'],
+      'material_id': line['material_id'],
       'description': line['description'] ?? '',
-      // 'quantity': quantity,
-      // 'unit_price': unitPrice,
+      'quantity': quantity,
+      'unit_price': unitPrice,
       'line_total': lineTotal,
     };
     await db.insert('invoice_lines', data);
@@ -690,11 +705,45 @@ class DatabaseService {
       'paid_at': payment['paid_at'] ?? now,
     };
     await db.insert('payments', data);
+    await _syncInvoicePaymentStatus(payment['invoice_id']);
     return id;
   }
 
+  Future<void> _syncInvoicePaymentStatus(String invoiceId) async {
+    final balance = await getInvoiceBalance(invoiceId);
+    if (balance <= 0) {
+      await db.update(
+        'invoices',
+        {'status': 'paid'},
+        where: 'id = ?',
+        whereArgs: [invoiceId],
+      );
+    } else {
+      final invoice = await getInvoice(invoiceId);
+      if (invoice != null && (invoice['status'] ?? '') == 'paid') {
+        await db.update(
+          'invoices',
+          {'status': 'pending'},
+          where: 'id = ?',
+          whereArgs: [invoiceId],
+        );
+      }
+    }
+  }
+
   Future<int> deletePayment(String id) async {
-    return await db.delete('payments', where: 'id = ?', whereArgs: [id]);
+    final rows = await db.query(
+      'payments',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    final invoiceId = rows.isNotEmpty ? rows.first['invoice_id']?.toString() : null;
+    final deleted = await db.delete('payments', where: 'id = ?', whereArgs: [id]);
+    if (invoiceId != null && invoiceId.isNotEmpty) {
+      await _syncInvoicePaymentStatus(invoiceId);
+    }
+    return deleted;
   }
 
   Future<double> getInvoiceBalance(String invoiceId) async {
@@ -787,19 +836,12 @@ class DatabaseService {
   Future<List<Map<String, dynamic>>> getLowStockItems({
     int threshold = 3,
   }) async {
-    final items = await db.rawQuery(
-      '''
-      SELECT 
-        id,
-        name,
-        qty,
-        threshold
+    final items = await db.rawQuery('''
+      SELECT id, name, qty, threshold, unit
       FROM inventory
-      WHERE qty <= ?
+      WHERE qty <= 0 OR qty <= COALESCE(threshold, ?)
       ORDER BY qty ASC
-    ''',
-      [threshold],
-    );
+    ''', [threshold]);
     return items;
   }
 

@@ -17,15 +17,7 @@ class CustomWindowBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Expanded(
-            child: WindowTitleBarBox(
-              child: MoveWindow(
-                child: Image.asset(
-                  Assets.of(context).logo_png,
-                  width: 100.w,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
+            child: WindowTitleBarBox(child: MoveWindow(child: SizedBox())),
           ),
 
           WindowTitleBarBox(

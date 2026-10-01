@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:dental_managment_system/features/home/controllers/dash_board_controller.dart';
 import 'package:dental_managment_system/features/home/views/widgets/notification_tile.dart';
 import '../../../../core/colors.dart';
@@ -8,77 +7,73 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../dashboard_page.dart';
-
 class DailyNotificationsDrawer extends StatelessWidget {
   const DailyNotificationsDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Get existing controller or create if missing
     final DashBoardController ctrl = Get.isRegistered<DashBoardController>()
-        ? Get.find<DashBoardController>(tag: tag)
-        : Get.put(DashBoardController());
+        ? Get.find<DashBoardController>()
+        : Get.put(DashBoardController(), permanent: true);
 
-    return Drawer(
-      backgroundColor: Colors.transparent,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(25),
-          bottomLeft: Radius.circular(25),
-        ),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            width: 360.w,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.95),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(25),
-                bottomLeft: Radius.circular(25),
-              ),
-            ),
-            child: Column(
+    final nav = Get.find<NavigationController>();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(left: BorderSide(color: Colors.grey.shade200)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(-2, 0),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+            child: Row(
               children: [
-                Padding(
-                  padding: EdgeInsets.all(20.w),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "الاشعارات",
-                            style: GoogleFonts.poppins(
-                              fontSize: 18.sp,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.mainColor,
-                            ),
-                          ),
-                          SizedBox(height: 6.h),
-                          Obx(
-                            () => Text(
-                              '${ctrl.todayAppointments.length} معاينة · ${ctrl.lowStockItems.length} مخزون منخفض',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12.sp,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        'الإشعارات',
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.mainColor,
+                        ),
                       ),
-                      IconButton(
-                        padding: EdgeInsets.zero,
-                        icon: Icon(Icons.close, size: 20.sp),
-                        onPressed: () => Navigator.of(context).pop(),
+                      const SizedBox(height: 2),
+                      Obx(
+                        () => Text(
+                          '${ctrl.todayAppointments.length} معاينة · ${ctrl.lowStockItems.length} مخزون',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
+                IconButton(
+                  tooltip: 'إغلاق',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: nav.closeNotificationsPanel,
+                ),
+              ],
+            ),
+          ),
 
-                Expanded(
-                  child: Obx(() {
+          Expanded(
+            child: Obx(() {
                     final appts = ctrl.todayAppointments;
                     final low = ctrl.lowStockItems;
 
@@ -94,8 +89,8 @@ class DailyNotificationsDrawer extends StatelessWidget {
                       );
                     }
 
-                    return ListView(
-                      padding: EdgeInsets.symmetric(horizontal: 10.w),
+              return ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                       children: [
                         // Upcoming appointments (next 30 min)
                         if (appts.isNotEmpty) ...[
@@ -193,7 +188,7 @@ class DailyNotificationsDrawer extends StatelessWidget {
                                     Get.isRegistered<NavigationController>()
                                     ? Get.find<NavigationController>()
                                     : null;
-                                if (nav != null) nav.select(3);
+                                if (nav != null) nav.select(4);
                               },
                               child: Container(
                                 margin: EdgeInsets.symmetric(vertical: 8.h),
@@ -257,12 +252,9 @@ class DailyNotificationsDrawer extends StatelessWidget {
                         ],
                       ],
                     );
-                  }),
-                ),
-              ],
-            ),
+            }),
           ),
-        ),
+        ],
       ),
     );
   }

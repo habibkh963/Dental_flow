@@ -16,8 +16,9 @@ class DatabaseService {
   final List<Map<String, dynamic>> _appointments = [];
   final List<Map<String, dynamic>> _inventory = [];
   final List<Map<String, dynamic>> _invoices = [];
+  final List<Map<String, dynamic>> _invoiceLines = [];
+  final List<Map<String, dynamic>> _appointmentMaterials = [];
   final Map<String, String> _settings = {};
-  // New: payments and patient_files
   final List<Map<String, dynamic>> _payments = [];
   final List<Map<String, dynamic>> _patientFiles = [];
   final List<Map<String, dynamic>> _inventoryOutputs = [];
@@ -109,7 +110,39 @@ class DatabaseService {
   Future<int> deleteAppointment(String id) async {
     final before = _appointments.length;
     _appointments.removeWhere((e) => e['id'] == id);
+    _appointmentMaterials.removeWhere((e) => e['appointment_id'] == id);
     return before - _appointments.length;
+  }
+
+  Future<List<Map<String, dynamic>>> getAppointmentMaterials(
+    String appointmentId,
+  ) async {
+    return List<Map<String, dynamic>>.from(
+      _appointmentMaterials.where((e) => e['appointment_id'] == appointmentId),
+    );
+  }
+
+  Future<String> addAppointmentMaterial(
+    String appointmentId,
+    String materialId,
+    int quantity,
+  ) async {
+    final id = _uuid.v4();
+    _appointmentMaterials.add({
+      'id': id,
+      'appointment_id': appointmentId,
+      'material_id': materialId,
+      'quantity': quantity,
+    });
+    return id;
+  }
+
+  Future<int> deleteAppointmentMaterials(String appointmentId) async {
+    final before = _appointmentMaterials.length;
+    _appointmentMaterials.removeWhere(
+      (e) => e['appointment_id'] == appointmentId,
+    );
+    return before - _appointmentMaterials.length;
   }
 
   Future<int> countPatients() async => _patients.length;
@@ -139,6 +172,7 @@ class DatabaseService {
       'name': item['name'] ?? '',
       'qty': item['qty'] ?? 0,
       'threshold': item['threshold'] ?? 0,
+      'unit': item['unit'] ?? 'وحدة',
     };
     _inventory.add(data);
     return id;
@@ -177,10 +211,33 @@ class DatabaseService {
       'patient_id': invoice['patient_id'],
       'total': invoice['total'] ?? 0.0,
       'status': invoice['status'] ?? 'pending',
-      'issued_at': now,
+      'type_of_treatment': invoice['type_of_treatment'] ?? '',
+      'issued_at': invoice['issued_at'] ?? now,
     };
     _invoices.add(data);
     return id;
+  }
+
+  Future<Map<String, dynamic>?> getInvoice(String id) async {
+    for (final invoice in _invoices) {
+      if (invoice['id'] == id) return Map<String, dynamic>.from(invoice);
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> getLatestInvoiceByPatientId(
+    String patientId,
+  ) async {
+    final list = _invoices.where((e) => e['patient_id'] == patientId).toList();
+    if (list.isEmpty) return null;
+    list.sort((a, b) => ('${b['issued_at']}').compareTo('${a['issued_at']}'));
+    return Map<String, dynamic>.from(list.first);
+  }
+
+  Future<List<Map<String, dynamic>>> getInvoiceLines(String invoiceId) async {
+    return List<Map<String, dynamic>>.from(
+      _invoiceLines.where((e) => e['invoice_id'] == invoiceId),
+    );
   }
 
   Future<int> updateInvoice(String id, Map<String, dynamic> updates) async {
@@ -224,12 +281,32 @@ class DatabaseService {
       'paid_at': payment['paid_at'] ?? now,
     };
     _payments.add(data);
+    await _syncInvoicePaymentStatus(payment['invoice_id']);
     return id;
   }
 
+  Future<void> _syncInvoicePaymentStatus(String invoiceId) async {
+    final balance = await getInvoiceBalance(invoiceId);
+    final idx = _invoices.indexWhere((e) => e['id'] == invoiceId);
+    if (idx == -1) return;
+    if (balance <= 0) {
+      _invoices[idx] = {..._invoices[idx], 'status': 'paid'};
+    } else if (_invoices[idx]['status'] == 'paid') {
+      _invoices[idx] = {..._invoices[idx], 'status': 'pending'};
+    }
+  }
+
   Future<int> deletePayment(String id) async {
+    final payment = _payments.firstWhere(
+      (e) => e['id'] == id,
+      orElse: () => {},
+    );
+    final invoiceId = payment['invoice_id']?.toString();
     final before = _payments.length;
     _payments.removeWhere((e) => e['id'] == id);
+    if (invoiceId != null && invoiceId.isNotEmpty) {
+      await _syncInvoicePaymentStatus(invoiceId);
+    }
     return before - _payments.length;
   }
 

@@ -1,6 +1,3 @@
-import 'dart:developer';
-import 'dart:ui';
-
 import 'package:dental_managment_system/core/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -11,7 +8,7 @@ import 'dart:io';
 import '../../../services/database_service.dart';
 import '../controller/patients_controller.dart';
 import 'widgets/patient_dialog.dart';
-import 'widgets/invoice_dialog.dart';
+import '../../billing_manage/views/widgets/invoice_dialog.dart';
 
 class PatientsPage extends StatelessWidget {
   final c = Get.put(
@@ -348,7 +345,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
                     children: [
                       FilledButton.icon(
                         onPressed: () =>
-                            openInvoiceDialog(context, widget.patient),
+                            openInvoiceDialog(patient: widget.patient),
                         icon: const Icon(Icons.receipt_long, size: 18),
                         label: Text('الفاتورة', style: GoogleFonts.poppins()),
                         style: FilledButton.styleFrom(

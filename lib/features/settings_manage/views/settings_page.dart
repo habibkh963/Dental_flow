@@ -1,17 +1,11 @@
-import 'dart:developer';
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:dental_managment_system/services/database_service.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../core/colors.dart';
-import '../../inventory_manage/views/FUNCTIONS/show_edit_dialog.dart';
 
 class SettingsPage extends StatelessWidget {
   final SettingsController ctrl = Get.put(
@@ -311,9 +305,6 @@ class SettingsController extends GetxController {
   String? get password => storage.read('app_password');
   @override
   void onInit() {
-    final storage = GetStorage();
-
-    log('', name: '${storage.read('app_password')}');
     super.onInit();
   }
 

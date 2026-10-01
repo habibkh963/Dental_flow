@@ -1,242 +1,270 @@
-import 'dart:developer';
-
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/colors.dart';
 import '../../../services/database_service.dart';
+import '../models/appointment.dart';
+import '../utils/appointment_input.dart';
+import '../views/widgets/appointment_dialog.dart';
+import 'appointment_dialog_controller.dart';
 
 class AppointmentsController extends GetxController {
-  final appts = <Map<String, dynamic>>[].obs;
+  final db = DatabaseService.instance;
+
+  final appointments = <Appointment>[].obs;
   final patients = <Map<String, dynamic>>[].obs;
   final inventory = <Map<String, dynamic>>[].obs;
   final loading = false.obs;
+
+  final _appointments = <Appointment>[];
+
   @override
   void onInit() {
     super.onInit();
-    fetch();
-    fetchPatients();
-    fetchInventory();
+    loadAll();
   }
 
-  Future<void> fetch({String? patientId}) async {
+  Future<void> loadAll() async {
     loading.value = true;
+    try {
+      await Future.wait([fetchPatients(), fetchInventory()]);
+      final raw = await db.getAppointments();
+      final patientMap = {
+        for (final p in patients)
+          p['id']?.toString() ?? '': _patientName(p),
+      };
 
-    final result = await DatabaseService.instance.getAppointments(
-      patientId: patientId,
-    );
+      _appointments
+        ..clear()
+        ..addAll(
+          raw.map(
+            (row) => Appointment.fromMap(
+              row,
+              patientName: patientMap[row['patient_id']?.toString()] ?? '-',
+            ),
+          ),
+        );
+      appointments.assignAll(_appointments);
+    } finally {
+      loading.value = false;
+    }
+  }
 
-    // 🔑 حوّلهم ل Maps عاديين
-    appts.value = result.map((e) => Map<String, dynamic>.from(e)).toList();
+  Future<void> reloadAppointmentsCache() async {
+    if (patients.isEmpty) {
+      await fetchPatients();
+    }
 
-    await Future.forEach(appts.value, (element) async {
-      final patient = await DatabaseService.instance.getPatientById(
-        element['patient_id'],
+    final raw = await db.getAppointments();
+    final patientMap = {
+      for (final p in patients) p['id']?.toString() ?? '': _patientName(p),
+    };
+
+    _appointments
+      ..clear()
+      ..addAll(
+        raw.map(
+          (row) => Appointment.fromMap(
+            row,
+            patientName: patientMap[row['patient_id']?.toString()] ?? '-',
+          ),
+        ),
       );
-
-      element['patient_name'] =
-          '${patient?['first_name']} ${patient?['last_name']}';
-    });
-
-    log(appts.value.toString());
-    loading.value = false;
   }
 
   Future<void> fetchPatients() async {
-    patients.value = await DatabaseService.instance.getPatients();
-    log(patients.value.toString());
+    patients.assignAll(await db.getPatients());
   }
 
   Future<void> fetchInventory() async {
-    inventory.value = await DatabaseService.instance.getInventory();
-    log(inventory.value.toString());
+    inventory.assignAll(await db.getInventory());
   }
 
-  Future<void> add(Map<String, dynamic> data) async {
-    // Extract materials before saving appointment
-    final materials = data['materials'] as List? ?? [];
-    data.remove('materials');
-
-    final appointmentId = await DatabaseService.instance.addAppointment(data);
-
-    // Save materials if any and adjust inventory (decrement stock)
-    if (materials.isNotEmpty) {
-      for (final material in materials) {
-        final materialId = material['material_id'];
-        final usedQty = material['quantity'] is int
-            ? material['quantity'] as int
-            : int.tryParse(material['quantity'].toString()) ?? 0;
-
-        await DatabaseService.instance.addAppointmentMaterial(
-          appointmentId,
-          materialId,
-          usedQty,
-        );
-
-        // Try to find inventory item in-memory first
-        Map<String, dynamic> invItem = {};
-        try {
-          invItem = inventory.firstWhere(
-            (i) => i['id'] == materialId,
-            orElse: () => <String, dynamic>{},
-          );
-        } catch (_) {
-          invItem = <String, dynamic>{};
-        }
-
-        if (invItem.isNotEmpty) {
-          final currentQty = invItem['qty'] is int
-              ? invItem['qty'] as int
-              : int.tryParse(invItem['qty'].toString()) ?? 0;
-          final newQty = currentQty - usedQty;
-          await DatabaseService.instance.updateInventoryItem(invItem['id'], {
-            'qty': newQty < 0 ? 0 : newQty,
-          });
-        } else {
-          // Fallback: query DB for the inventory item then update
-          final dbInv = await DatabaseService.instance.getInventory();
-          final found = dbInv.firstWhere(
-            (i) => i['id'] == materialId,
-            orElse: () => <String, dynamic>{},
-          );
-          if (found.isNotEmpty) {
-            final currentQty = found['qty'] is int
-                ? found['qty'] as int
-                : int.tryParse(found['qty'].toString()) ?? 0;
-            final newQty = currentQty - usedQty;
-            await DatabaseService.instance.updateInventoryItem(found['id'], {
-              'qty': newQty < 0 ? 0 : newQty,
-            });
-          }
-        }
-      }
-
-      // Refresh in-memory inventory after adjustments
-      await fetchInventory();
-    }
-
-    await fetch();
+  String _patientName(Map<String, dynamic> patient) {
+    return '${patient['first_name'] ?? ''} ${patient['last_name'] ?? ''}'
+        .trim();
   }
 
-  Future<void> updateAppt(String id, Map<String, dynamic> data) async {
-    // Extract materials before updating appointment
-    final materials = data['materials'] as List? ?? [];
-    data.remove('materials');
+  Future<void> createAppointment(AppointmentFormValues values) async {
+    await _saveAppointment(values: values);
+    await loadAll();
+  }
 
-    // Restore stock for previously used materials
-    final oldMaterials = await DatabaseService.instance.getAppointmentMaterials(
-      id,
-    );
-    if (oldMaterials.isNotEmpty) {
-      for (final old in oldMaterials) {
-        final oldMaterialId = old['material_id'];
-        final oldQty = old['quantity'] is int
-            ? old['quantity'] as int
-            : int.tryParse(old['quantity'].toString()) ?? 0;
-
-        // Find current inventory item
-        Map<String, dynamic> invItem = {};
-        try {
-          invItem = inventory.firstWhere(
-            (i) => i['id'] == oldMaterialId,
-            orElse: () => <String, dynamic>{},
-          );
-        } catch (_) {
-          invItem = <String, dynamic>{};
-        }
-
-        if (invItem.isNotEmpty) {
-          final currentQty = invItem['qty'] is int
-              ? invItem['qty'] as int
-              : int.tryParse(invItem['qty'].toString()) ?? 0;
-          final newQty = currentQty + oldQty;
-          await DatabaseService.instance.updateInventoryItem(invItem['id'], {
-            'qty': newQty,
-          });
-        } else {
-          final dbInv = await DatabaseService.instance.getInventory();
-          final found = dbInv.firstWhere(
-            (i) => i['id'] == oldMaterialId,
-            orElse: () => <String, dynamic>{},
-          );
-          if (found.isNotEmpty) {
-            final currentQty = found['qty'] is int
-                ? found['qty'] as int
-                : int.tryParse(found['qty'].toString()) ?? 0;
-            final newQty = currentQty + oldQty;
-            await DatabaseService.instance.updateInventoryItem(found['id'], {
-              'qty': newQty,
-            });
-          }
-        }
-      }
-
-      // After restoring, delete old appointment materials
-      await DatabaseService.instance.deleteAppointmentMaterials(id);
-      // Refresh inventory before applying new materials
-      await fetchInventory();
-    }
-
-    // Update appointment basic fields
-    await DatabaseService.instance.updateAppointment(id, data);
-
-    // Save new materials and decrement inventory
-    if (materials.isNotEmpty) {
-      for (final material in materials) {
-        final materialId = material['material_id'];
-        final usedQty = material['quantity'] is int
-            ? material['quantity'] as int
-            : int.tryParse(material['quantity'].toString()) ?? 0;
-
-        await DatabaseService.instance.addAppointmentMaterial(
-          id,
-          materialId,
-          usedQty,
-        );
-
-        // adjust inventory
-        Map<String, dynamic> invItem = {};
-        try {
-          invItem = inventory.firstWhere(
-            (i) => i['id'] == materialId,
-            orElse: () => <String, dynamic>{},
-          );
-        } catch (_) {
-          invItem = <String, dynamic>{};
-        }
-
-        if (invItem.isNotEmpty) {
-          final currentQty = invItem['qty'] is int
-              ? invItem['qty'] as int
-              : int.tryParse(invItem['qty'].toString()) ?? 0;
-          final newQty = currentQty - usedQty;
-          await DatabaseService.instance.updateInventoryItem(invItem['id'], {
-            'qty': newQty < 0 ? 0 : newQty,
-          });
-        } else {
-          final dbInv = await DatabaseService.instance.getInventory();
-          final found = dbInv.firstWhere(
-            (i) => i['id'] == materialId,
-            orElse: () => <String, dynamic>{},
-          );
-          if (found.isNotEmpty) {
-            final currentQty = found['qty'] is int
-                ? found['qty'] as int
-                : int.tryParse(found['qty'].toString()) ?? 0;
-            final newQty = currentQty - usedQty;
-            await DatabaseService.instance.updateInventoryItem(found['id'], {
-              'qty': newQty < 0 ? 0 : newQty,
-            });
-          }
-        }
-      }
-
-      await fetchInventory();
-    }
-
-    await fetch();
+  Future<void> updateAppointment(
+    String id,
+    AppointmentFormValues values,
+  ) async {
+    await _saveAppointment(id: id, values: values, isUpdate: true);
+    await loadAll();
   }
 
   Future<void> remove(String id) async {
-    await DatabaseService.instance.deleteAppointment(id);
-    await fetch();
+    final oldMaterials = await db.getAppointmentMaterials(id);
+    if (oldMaterials.isNotEmpty) {
+      await _restoreMaterials(oldMaterials);
+      await db.deleteAppointmentMaterials(id);
+    }
+    await db.deleteAppointment(id);
+    await loadAll();
+  }
+
+  void openAddDialog() => _openDialog();
+
+  void openEditDialog(Appointment appointment) =>
+      _openDialog(existing: appointment);
+
+  Future<void> confirmDelete(Appointment appointment) async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        title: Text('حذف الموعد؟', style: GoogleFonts.poppins()),
+        content: Text(
+          'هل أنت متأكد من حذف موعد ${appointment.patientName}؟',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('إلغاء', style: GoogleFonts.poppins()),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: true),
+            child: Text(
+              'حذف',
+              style: GoogleFonts.poppins(color: AppColors.cancelledColor),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await remove(appointment.id);
+    }
+  }
+
+  String? validateTimeConflict({
+    required String date,
+    required String time,
+    String? excludeId,
+  }) {
+    return findTimeConflict(
+      date: date,
+      time: time,
+      appointments: _appointments,
+      excludeId: excludeId,
+    );
+  }
+
+  void _openDialog({Appointment? existing}) {
+    final tag = AppointmentDialogController.dialogTag;
+    if (Get.isRegistered<AppointmentDialogController>(tag: tag)) {
+      Get.delete<AppointmentDialogController>(tag: tag);
+    }
+
+    final dialogController = Get.put(
+      AppointmentDialogController(
+        appointmentsController: this,
+        existing: existing,
+      ),
+      tag: tag,
+    );
+
+    final context = Get.context;
+    if (context == null) {
+      Get.delete<AppointmentDialogController>(tag: tag);
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AppointmentDialogWidget(
+        dialogController: dialogController,
+      ),
+    ).whenComplete(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (Get.isRegistered<AppointmentDialogController>(tag: tag)) {
+          Get.delete<AppointmentDialogController>(tag: tag);
+        }
+      });
+    });
+  }
+
+  Future<void> _saveAppointment({
+    String? id,
+    required AppointmentFormValues values,
+    bool isUpdate = false,
+  }) async {
+    final payload = {
+      'patient_id': values.patientId,
+      'date': values.date,
+      'time': values.time,
+      'status': values.status,
+      'notes': values.notes,
+    };
+
+    if (isUpdate && id != null) {
+      await _restoreAndClearMaterials(id);
+      await db.updateAppointment(id, payload);
+      await _applyMaterials(id, values.materials);
+      return;
+    }
+
+    final appointmentId = await db.addAppointment(payload);
+    await _applyMaterials(appointmentId, values.materials);
+  }
+
+  Future<void> _restoreAndClearMaterials(String appointmentId) async {
+    final oldMaterials = await db.getAppointmentMaterials(appointmentId);
+    if (oldMaterials.isEmpty) return;
+    await _restoreMaterials(oldMaterials);
+    await db.deleteAppointmentMaterials(appointmentId);
+    await fetchInventory();
+  }
+
+  Future<void> _applyMaterials(
+    String appointmentId,
+    List<Map<String, dynamic>> materials,
+  ) async {
+    if (materials.isEmpty) return;
+
+    for (final material in materials) {
+      final materialId = material['material_id']?.toString() ?? '';
+      final usedQty = material['quantity'] is int
+          ? material['quantity'] as int
+          : int.tryParse('${material['quantity']}') ?? 0;
+      if (materialId.isEmpty || usedQty <= 0) continue;
+
+      await db.addAppointmentMaterial(appointmentId, materialId, usedQty);
+      await _adjustInventoryStock(materialId, -usedQty);
+    }
+
+    await fetchInventory();
+  }
+
+  Future<void> _restoreMaterials(List<Map<String, dynamic>> materials) async {
+    for (final material in materials) {
+      final materialId = material['material_id']?.toString() ?? '';
+      final qty = material['quantity'] is int
+          ? material['quantity'] as int
+          : int.tryParse('${material['quantity']}') ?? 0;
+      if (materialId.isEmpty || qty <= 0) continue;
+      await _adjustInventoryStock(materialId, qty);
+    }
+  }
+
+  Future<void> _adjustInventoryStock(String materialId, int delta) async {
+    final item = inventory.firstWhereOrNull((i) => i['id'] == materialId) ??
+        (await db.getInventory())
+            .firstWhereOrNull((i) => i['id'] == materialId);
+
+    if (item == null) return;
+
+    final currentQty = item['qty'] is int
+        ? item['qty'] as int
+        : int.tryParse('${item['qty']}') ?? 0;
+    final newQty = (currentQty + delta).clamp(0, 999999);
+    await db.updateInventoryItem(materialId, {'qty': newQty});
   }
 }

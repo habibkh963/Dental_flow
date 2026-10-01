@@ -22,7 +22,12 @@ class NavigationController extends GetxController {
   }
 
   final selectedIndex = 0.obs;
-  RxBool isHovered = false.obs;
-  RxBool finishHovereing = false.obs;
+  final showNotificationsPanel = false.obs;
+
   void select(int index) => selectedIndex.value = index;
+
+  void toggleNotificationsPanel() =>
+      showNotificationsPanel.value = !showNotificationsPanel.value;
+
+  void closeNotificationsPanel() => showNotificationsPanel.value = false;
 }

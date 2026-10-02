@@ -3,7 +3,9 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/colors.dart';
+import '../../../services/app_notification_service.dart';
 import '../../../services/database_service.dart';
+import '../../home/controllers/dash_board_controller.dart';
 import '../models/inventory_item.dart';
 import '../utils/inventory_input.dart';
 import '../views/widgets/inventory_item_dialog.dart';
@@ -49,17 +51,49 @@ class InventoryController extends GetxController {
       'unit': values.unit,
     };
 
-    if (id == null) {
-      await DatabaseService.instance.addInventoryItem(data);
-    } else {
-      await DatabaseService.instance.updateInventoryItem(id, data);
+    final itemId = id ??
+        await DatabaseService.instance.addInventoryItem(data);
+    if (id != null) {
+      await DatabaseService.instance.updateInventoryItem(itemId, data);
     }
     await fetch();
+    await _notifyStockIfNeeded(
+      values.name,
+      values.quantity,
+      values.lowStockThreshold,
+      values.unit,
+      itemId,
+    );
+    _refreshDashboardAlerts();
   }
 
   Future<void> remove(String id) async {
     await DatabaseService.instance.deleteInventoryItem(id);
     await fetch();
+    _refreshDashboardAlerts();
+  }
+
+  Future<void> _notifyStockIfNeeded(
+    String name,
+    int qty,
+    int threshold,
+    String unit,
+    String? id,
+  ) async {
+    if (id == null) return;
+    await AppNotificationService.instance.notifyInventoryItem(
+      itemId: id,
+      name: name,
+      qty: qty,
+      threshold: threshold,
+      unit: unit,
+    );
+  }
+
+  void _refreshDashboardAlerts() {
+    if (Get.isRegistered<DashBoardController>()) {
+      Get.find<DashBoardController>().loadStats();
+    }
   }
 
   void openAddDialog() => _openItemDialog();

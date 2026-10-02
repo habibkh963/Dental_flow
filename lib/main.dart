@@ -8,6 +8,7 @@ import 'features/auth/controllers/auth_controller.dart';
 import 'features/auth/screens/password_creen.dart';
 import 'features/home/views/widgets/app_shell.dart';
 import 'features/inventory_manage/controller/daily_inventory_controller.dart';
+import 'services/app_notification_service.dart';
 import 'services/database_service.dart';
 
 List<String> arabicIndex = [
@@ -44,6 +45,7 @@ List<String> arabicIndex = [
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.instance.init();
+  await AppNotificationService.instance.initialize();
   Get.put(DailyInventoryController());
   runApp(DentalClinic());
 }

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/colors.dart';
+import '../../../services/app_notification_service.dart';
 import '../../../services/database_service.dart';
+import '../../home/controllers/dash_board_controller.dart';
+import '../../inventory_manage/controller/daily_inventory_controller.dart';
 import '../models/invoice.dart';
 import '../models/payment_record.dart';
 import '../utils/billing_input.dart';
@@ -89,6 +92,16 @@ class PaymentDialogController extends GetxController {
       noteController.clear();
       await loadData();
       await invoicesController.loadAll();
+      await AppNotificationService.instance.notifyPaymentReceived(
+        amount: result.values!.amount,
+        patientLabel: patientName,
+      );
+      if (Get.isRegistered<DashBoardController>()) {
+        await Get.find<DashBoardController>().loadStats();
+      }
+      if (Get.isRegistered<DailyInventoryController>()) {
+        await Get.find<DailyInventoryController>().refresh();
+      }
       Get.snackbar(
         'نجح',
         'تم تسجيل عملية الدفع',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../services/database_service.dart';
+import '../../home/controllers/dash_board_controller.dart';
 import '../models/appointment.dart';
 import '../models/appointment_status.dart';
 import '../utils/appointment_input.dart';
@@ -178,6 +179,10 @@ class AppointmentDialogController extends GetxController {
         );
       } else {
         await appointmentsController.createAppointment(parsed.values!);
+      }
+
+      if (Get.isRegistered<DashBoardController>()) {
+        await Get.find<DashBoardController>().loadStats();
       }
 
       if (context.mounted) {

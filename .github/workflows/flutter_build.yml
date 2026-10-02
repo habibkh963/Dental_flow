@@ -1,0 +1,172 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-version:
+    name: Resolve release version
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.release.outputs.label }}
+      app_version: ${{ steps.release.outputs.app_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve release label
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "label=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "app_version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+            echo "label=v${VERSION}-build${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "app_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-windows:
+    name: Build Windows installer
+    needs: resolve-version
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.2"
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        shell: pwsh
+        run: |
+          $version = "${{ needs.resolve-version.outputs.app_version }}"
+          flutter build windows `
+            --release `
+            --build-name=$version `
+            --build-number=${{ github.run_number }}
+
+      - name: Verify build output
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $PWD "build\windows\x64\runner\Release"
+          $exe = Join-Path $buildDir "dental_managment_system.exe"
+          if (-not (Test-Path $exe)) {
+            throw "Release executable not found at $exe"
+          }
+          Get-ChildItem $buildDir | Format-Table Name, Length
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = "${{ needs.resolve-version.outputs.app_version }}"
+          $label = "${{ needs.resolve-version.outputs.label }}"
+          $buildDir = Join-Path $PWD "build\windows\x64\runner\Release"
+          $outputDir = Join-Path $PWD "release"
+          New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup compiler (ISCC.exe) not found"
+          }
+
+          & $iscc `
+            "$PWD\scripts\dental_flow_setup.iss" `
+            "/DMyAppVersion=$version" `
+            "/DBuildDir=$buildDir" `
+            "/DOutputDir=$outputDir" `
+            "/DOutputBaseFilename=DentalFlow-$label-setup"
+
+          $installer = Get-ChildItem $outputDir -Filter "DentalFlow-$label-setup.exe" | Select-Object -First 1
+          if (-not $installer) {
+            Get-ChildItem $outputDir
+            throw "Installer was not produced in $outputDir"
+          }
+          Write-Host "Built installer: $($installer.FullName)"
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: release/DentalFlow-*-setup.exe
+
+  release:
+    name: Publish GitHub release
+    needs: [resolve-version, build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: release
+
+      - name: List release files
+        run: ls -lh release
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Dental Flow ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Dental Flow ${{ github.ref_name }}
+
+            ### Windows
+            Download **DentalFlow-*-setup.exe** and run the installer on Windows 10/11 (64-bit).
+
+            ### What's included
+            - Desktop app with patient, appointment, billing, inventory, and daily ledger modules
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-dispatch-artifacts:
+    name: Upload manual build artifacts
+    needs: [resolve-version, build-windows]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: release
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-builds
+          path: release/*

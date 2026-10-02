@@ -47,7 +47,9 @@ dependencies:
   flutter_screenutil:
   auto_size_text:
   bitsdojo_window:
-  flutter_local_notifications: ^13.0.0
+  # Pinned below v18 — v19+ pulls flutter_local_notifications_windows which
+  # requires Visual Studio ATL (atlbase.h) for Windows release builds.
+  flutter_local_notifications: ^17.2.4
   get_storage: ^2.1.1
   alphabet_list_view:
 

@@ -30,4 +30,6 @@ class NavigationController extends GetxController {
       showNotificationsPanel.value = !showNotificationsPanel.value;
 
   void closeNotificationsPanel() => showNotificationsPanel.value = false;
+
+  void openNotificationsPanel() => showNotificationsPanel.value = true;
 }

@@ -21,11 +21,12 @@ class AppointmentDialogController extends GetxController {
   final Appointment? existing;
 
   late final TextEditingController notesController;
+  late final TextEditingController customPresentationController;
 
   final selectedPatientId = ''.obs;
   final selectedDate = Rxn<DateTime>();
   final selectedTime = Rxn<TimeOfDay>();
-  final uiStatus = 'scheduled'.obs;
+  final selectedPresentations = <String>[].obs;
   final selectedMaterials = <Map<String, dynamic>>[].obs;
   final selectedMaterialId = RxnString();
   final selectedQuantity = 1.obs;
@@ -38,19 +39,21 @@ class AppointmentDialogController extends GetxController {
 
   void setFormError(String message) => formError.value = message;
 
-  bool get showMaterials => uiStatus.value == 'completed';
+  bool get showMaterials =>
+      isEdit && existing!.status == AppointmentStatus.done;
 
   @override
   void onInit() {
     super.onInit();
     final appt = existing;
     notesController = TextEditingController(text: appt?.notes ?? '');
+    customPresentationController = TextEditingController();
 
     if (appt != null) {
       selectedPatientId.value = appt.patientId;
       selectedDate.value = DateTime.tryParse(appt.date);
       selectedTime.value = parseTimeOfDay(appt.time);
-      uiStatus.value = statusUiValue(appt.status);
+      selectedPresentations.assignAll(_splitPresentation(appt.presentation));
       _loadExistingMaterials(appt.id);
     }
 
@@ -65,8 +68,26 @@ class AppointmentDialogController extends GetxController {
   @override
   void onClose() {
     notesController.dispose();
+    customPresentationController.dispose();
     super.onClose();
   }
+
+  List<String> _splitPresentation(String raw) {
+    if (raw.trim().isEmpty) return [];
+    return raw.split(RegExp(r'[,،]')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+  }
+
+  String get presentationText {
+    final list = List<String>.from(selectedPresentations);
+    final custom = customPresentationController.text.trim();
+    if (custom.isNotEmpty && !list.contains(custom)) {
+      list.add(custom);
+    }
+    return list.join('، ');
+  }
+
+  String get uiStatusForSave =>
+      isEdit ? statusUiValue(existing!.status) : 'scheduled';
 
   Future<void> _loadExistingMaterials(String appointmentId) async {
     final materials =
@@ -146,7 +167,8 @@ class AppointmentDialogController extends GetxController {
       patientId: selectedPatientId.value,
       date: selectedDate.value,
       time: timeString,
-      uiStatus: uiStatus.value,
+      uiStatus: uiStatusForSave,
+      presentation: presentationText,
       notes: notesController.text,
       materials: selectedMaterials.toList(),
     );

@@ -112,6 +112,19 @@ class DashBoardController extends GetxController {
         for (final output in inventoryOutputs) {
           totalCosts += (output['price'] as num?)?.toDouble() ?? 0;
         }
+
+        final clinicExpenses = await db.db.query(
+          'clinic_expenses',
+          where: 'expense_date >= ? AND expense_date <= ?',
+          whereArgs: [
+            startOfMonth.toIso8601String(),
+            endOfMonth.toIso8601String(),
+          ],
+        );
+
+        for (final expense in clinicExpenses) {
+          totalCosts += (expense['amount'] as num?)?.toDouble() ?? 0;
+        }
       } catch (e) {
         debugPrint('Error calculating costs: $e');
       }

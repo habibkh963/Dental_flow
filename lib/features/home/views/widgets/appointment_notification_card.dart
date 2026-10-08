@@ -62,6 +62,12 @@ class AppointmentNotificationCard extends StatelessWidget {
     final phone = appointment['phone'] ?? '';
     final time = appointment['time'] ?? '--:--';
     final status = (appointment['status'] as String? ?? 'مجدولة').toLowerCase();
+    final presentation = appointment['presentation']?.toString().trim() ?? '';
+    final patientPlan =
+        appointment['treatment_plan']?.toString().trim() ?? '';
+    final treatmentLabel = presentation.isNotEmpty
+        ? presentation
+        : patientPlan;
 
     return Material(
       color: Colors.transparent,
@@ -103,6 +109,31 @@ class AppointmentNotificationCard extends StatelessWidget {
               const SizedBox(height: 12),
               // Phone
               if (phone.isNotEmpty) _buildAppointmentPhoneRow(phone),
+              if (treatmentLabel.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.only(left: 48),
+                  child: Container(
+                    width: double.infinity,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2A9D8F).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      treatmentLabel,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF2A9D8F),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
               // Notes if available
               if ((appointment['notes'] as String?)?.isNotEmpty ?? false) ...[
                 const SizedBox(height: 12),

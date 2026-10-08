@@ -5,22 +5,30 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/colors.dart';
 import '../../../services/database_service.dart';
 import '../models/daily_financial_summary.dart';
+import '../models/daily_inventory_tab.dart';
+import '../utils/clinic_expense_categories.dart';
 import '../utils/daily_inventory_calculations.dart';
 import '../utils/daily_inventory_date.dart';
+import '../views/widgets/clinic_expense_dialog.dart';
 import '../views/widgets/inventory_output_dialog.dart';
+import 'clinic_expense_dialog_controller.dart';
 import 'inventory_output_dialog_controller.dart';
 
 class DailyInventoryController extends GetxController {
   final db = DatabaseService.instance;
 
   final isLoading = false.obs;
-  final isIncomes = false.obs;
+  final selectedTab = DailyInventoryTab.outputs.obs;
   final isFilterActive = false.obs;
   final showSummaryDetails = false.obs;
 
   final dailyPaymentsList = <Map<String, dynamic>>[].obs;
   final filteredOutputs = <Map<String, dynamic>>[].obs;
   final inventoryOutputs = <Map<String, dynamic>>[].obs;
+  final clinicExpenses = <Map<String, dynamic>>[].obs;
+  final filteredClinicExpenses = <Map<String, dynamic>>[].obs;
+  /// null = عرض الكل
+  final clinicExpenseCategoryFilter = RxnString();
 
   final periodFilterSummary = DailyPeriodFilterSummary.empty.obs;
   final financialReport = Rxn<DailyFinancialReport>();
@@ -33,6 +41,7 @@ class DailyInventoryController extends GetxController {
 
   List<Map<String, dynamic>> _allPaymentsList = [];
   List<Map<String, dynamic>> _allInventoryOutputs = [];
+  List<Map<String, dynamic>> _allClinicExpenses = [];
   List<Map<String, dynamic>> _rawInvoices = [];
   List<Map<String, dynamic>> _rawPayments = [];
 
@@ -49,7 +58,24 @@ class DailyInventoryController extends GetxController {
       invoices: _rawInvoices,
       payments: _rawPayments,
       outputs: _allInventoryOutputs,
+      clinicExpenses: _allClinicExpenses,
       month: selected,
+    );
+  }
+
+  Map<String, double> get displayedMonthExpenseBreakdown {
+    final selected = selectedHistoryMonth.value ?? DateTime.now();
+    return sumClinicExpensesByCategory(
+      _allClinicExpenses,
+      whereDate: (date) => isSameMonth(date, startOfMonth(selected)),
+    );
+  }
+
+  double get displayedMonthInventoryOutputExpenses {
+    final selected = selectedHistoryMonth.value ?? DateTime.now();
+    return sumOutputExpenses(
+      _allInventoryOutputs,
+      whereDate: (date) => isSameMonth(date, startOfMonth(selected)),
     );
   }
 
@@ -71,7 +97,7 @@ class DailyInventoryController extends GetxController {
       _rawInvoices = await db.getInvoices();
       _rawPayments = await db.getAllPayments();
       _allPaymentsList = normalizePayments(_rawPayments);
-      await _loadInventoryOutputs();
+      await Future.wait([_loadInventoryOutputs(), _loadClinicExpenses()]);
       _recalculateSummaries();
       _refreshHistoryMonths();
       _resetListsToAll();
@@ -88,6 +114,7 @@ class DailyInventoryController extends GetxController {
       invoices: _rawInvoices,
       payments: _rawPayments,
       outputs: _allInventoryOutputs,
+      clinicExpenses: _allClinicExpenses,
     );
   }
 
@@ -98,12 +125,20 @@ class DailyInventoryController extends GetxController {
     filteredOutputs.assignAll(outputs);
   }
 
+  Future<void> _loadClinicExpenses() async {
+    final expenses = await db.getClinicExpenses();
+    clinicExpenses.assignAll(expenses);
+    _allClinicExpenses = List.from(expenses);
+    filteredClinicExpenses.assignAll(expenses);
+  }
+
   void _refreshHistoryMonths() {
     historyMonths.assignAll(
       collectAvailableHistoryMonths(
         invoices: _rawInvoices,
         payments: _rawPayments,
         outputs: _allInventoryOutputs,
+        clinicExpenses: _allClinicExpenses,
       ),
     );
   }
@@ -156,6 +191,7 @@ class DailyInventoryController extends GetxController {
   void _resetListsToAll() {
     dailyPaymentsList.assignAll(_allPaymentsList);
     filteredOutputs.assignAll(_allInventoryOutputs);
+    filteredClinicExpenses.assignAll(_allClinicExpenses);
     periodFilterSummary.value = DailyPeriodFilterSummary.empty;
   }
 
@@ -183,9 +219,20 @@ class DailyInventoryController extends GetxController {
       ),
     );
 
+    filteredClinicExpenses.assignAll(
+      filterByDateRange(
+        items: _allClinicExpenses,
+        start: selectedStartDate.value,
+        end: selectedEndDate.value,
+        dateSelector: (item) =>
+            parseRecordDate(item['expense_date'] ?? item['created_at']),
+      ),
+    );
+
     periodFilterSummary.value = computePeriodFilterSummary(
       payments: _allPaymentsList,
       outputs: _allInventoryOutputs,
+      clinicExpenses: _allClinicExpenses,
       start: selectedStartDate.value,
       end: selectedEndDate.value,
     );
@@ -318,5 +365,108 @@ class DailyInventoryController extends GetxController {
     _refreshFilteredLists();
   }
 
+  void showAddClinicExpenseDialog() {
+    final tag = ClinicExpenseDialogController.dialogTag;
+    if (Get.isRegistered<ClinicExpenseDialogController>(tag: tag)) {
+      Get.delete<ClinicExpenseDialogController>(tag: tag);
+    }
+
+    final dialogController = Get.put(
+      ClinicExpenseDialogController(this),
+      tag: tag,
+    );
+
+    final context = Get.context;
+    if (context == null) {
+      Get.delete<ClinicExpenseDialogController>(tag: tag);
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ClinicExpenseDialog(dialogController: dialogController),
+    ).whenComplete(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (Get.isRegistered<ClinicExpenseDialogController>(tag: tag)) {
+          Get.delete<ClinicExpenseDialogController>(tag: tag);
+        }
+      });
+    });
+  }
+
+  Future<void> addClinicExpense(Map<String, dynamic> data) async {
+    await db.addClinicExpense(data);
+    await _loadClinicExpenses();
+    _recalculateSummaries();
+    _refreshHistoryMonths();
+    _refreshFilteredLists();
+  }
+
+  Future<void> confirmDeleteClinicExpense(String id, String description) async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        title: Text('حذف النفقة؟', style: GoogleFonts.poppins()),
+        content: Text(
+          'هل تريد حذف "$description"؟',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('إلغاء', style: GoogleFonts.poppins()),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: true),
+            child: Text(
+              'حذف',
+              style: GoogleFonts.poppins(color: AppColors.cancelledColor),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await removeClinicExpense(id);
+    }
+  }
+
+  Future<void> removeClinicExpense(String id) async {
+    await db.deleteClinicExpense(id);
+    await _loadClinicExpenses();
+    _recalculateSummaries();
+    _refreshHistoryMonths();
+    _refreshFilteredLists();
+  }
+
   DateTime? parseDate(dynamic dateValue) => parseRecordDate(dateValue);
+
+  List<Map<String, dynamic>> get visibleClinicExpenses {
+    final filter = clinicExpenseCategoryFilter.value;
+    if (filter == null) return filteredClinicExpenses;
+    return filteredClinicExpenses
+        .where(
+          (e) =>
+              ClinicExpenseCategory.byId(e['category']?.toString()).id ==
+              filter,
+        )
+        .toList();
+  }
+
+  double categoryExpenseTotal(String categoryId) {
+    var total = 0.0;
+    for (final expense in filteredClinicExpenses) {
+      if (ClinicExpenseCategory.byId(expense['category']?.toString()).id !=
+          categoryId) {
+        continue;
+      }
+      total += (expense['amount'] as num?)?.toDouble() ?? 0;
+    }
+    return total;
+  }
+
+  void setClinicExpenseCategoryFilter(String? categoryId) {
+    clinicExpenseCategoryFilter.value = categoryId;
+  }
 }

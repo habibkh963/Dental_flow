@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/appointment.dart';
 import '../../models/appointment_status.dart';
 import '../../utils/appointment_time.dart';
-import 'appointment_status_badge.dart';
 
 class AppointmentTile extends StatelessWidget {
   const AppointmentTile({
@@ -67,7 +66,19 @@ class AppointmentTile extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: AppointmentStatusBadge(status: appointment.status),
+            child: Text(
+              appointment.presentation.isNotEmpty
+                  ? appointment.presentation
+                  : appointment.status.label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           Expanded(
             child: Row(

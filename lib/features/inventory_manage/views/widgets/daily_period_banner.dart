@@ -58,7 +58,7 @@ class DailyPeriodBanner extends StatelessWidget {
                   Colors.green,
                 ),
                 _chip(
-                  'مخرجات (${summary.outputsCount})',
+                  'نفقات (${summary.totalExpenseEntries})',
                   formatMoney(summary.expensesTotal),
                   Colors.red,
                 ),

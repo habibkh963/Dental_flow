@@ -7,6 +7,7 @@ class AppointmentFormValues {
   final String date;
   final String time;
   final String status;
+  final String presentation;
   final String notes;
   final List<Map<String, dynamic>> materials;
 
@@ -15,6 +16,7 @@ class AppointmentFormValues {
     required this.date,
     required this.time,
     required this.status,
+    required this.presentation,
     required this.notes,
     required this.materials,
   });
@@ -25,6 +27,7 @@ class AppointmentFormValues {
   required DateTime? date,
   required String? time,
   required String uiStatus,
+  required String presentation,
   required String notes,
   required List<Map<String, dynamic>> materials,
 }) {
@@ -42,6 +45,10 @@ class AppointmentFormValues {
 
   if (timeToMinutes(time) == null) {
     return (values: null, error: 'صيغة الوقت غير صالحة');
+  }
+
+  if (presentation.trim().isEmpty) {
+    return (values: null, error: 'اختر نوع التمثيل / العلاج');
   }
 
   final storageStatus = switch (uiStatus) {
@@ -66,6 +73,7 @@ class AppointmentFormValues {
       date: date.toIso8601String().split('T').first,
       time: time,
       status: storageStatus,
+      presentation: presentation.trim(),
       notes: notes.trim(),
       materials: List<Map<String, dynamic>>.from(materials),
     ),

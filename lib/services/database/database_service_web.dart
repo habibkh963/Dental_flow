@@ -21,7 +21,10 @@ class DatabaseService {
   final Map<String, String> _settings = {};
   final List<Map<String, dynamic>> _payments = [];
   final List<Map<String, dynamic>> _patientFiles = [];
+  final List<Map<String, dynamic>> _patientConditions = [];
+  final List<Map<String, dynamic>> _conditionProgress = [];
   final List<Map<String, dynamic>> _inventoryOutputs = [];
+  final List<Map<String, dynamic>> _clinicExpenses = [];
 
   // Patients CRUD
   Future<List<Map<String, dynamic>>> getPatients() async {
@@ -45,6 +48,8 @@ class DatabaseService {
       'email': patient['email'] ?? '',
       'dob': patient['dob'] ?? '',
       'address': patient['address'] ?? '',
+      'diseases': patient['diseases'] ?? '',
+      'treatment_plan': patient['treatment_plan'] ?? '',
       'created_at': now,
       'updated_at': now,
     };
@@ -61,6 +66,14 @@ class DatabaseService {
   }
 
   Future<int> deletePatient(String id) async {
+    final conditionIds = _patientConditions
+        .where((e) => e['patient_id'] == id)
+        .map((e) => e['id'])
+        .toList();
+    _conditionProgress.removeWhere(
+      (e) => conditionIds.contains(e['condition_id']),
+    );
+    _patientConditions.removeWhere((e) => e['patient_id'] == id);
     final before = _patients.length;
     _patients.removeWhere((e) => e['id'] == id);
     return before - _patients.length;
@@ -92,6 +105,7 @@ class DatabaseService {
       'time': appointment['time'] ?? '',
       'status': appointment['status'] ?? 'scheduled',
       'notes': appointment['notes'] ?? '',
+      'presentation': appointment['presentation'] ?? '',
       'created_at': now,
       'updated_at': now,
     };
@@ -358,6 +372,86 @@ class DatabaseService {
     return '';
   }
 
+  Future<List<Map<String, dynamic>>> getPatientConditions(
+    String patientId,
+  ) async {
+    return List<Map<String, dynamic>>.from(
+      _patientConditions.where((e) => e['patient_id'] == patientId),
+    )..sort(
+        (a, b) =>
+            ('${a['condition_name']}').compareTo('${b['condition_name']}'),
+      );
+  }
+
+  Future<String> addPatientCondition(Map<String, dynamic> condition) async {
+    final id = condition['id'] ?? _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    _patientConditions.add({
+      'id': id,
+      'patient_id': condition['patient_id'],
+      'condition_name': condition['condition_name'] ?? '',
+      'created_at': condition['created_at'] ?? now,
+      'updated_at': condition['updated_at'] ?? now,
+    });
+    return id;
+  }
+
+  Future<int> deletePatientCondition(String id) async {
+    _conditionProgress.removeWhere((e) => e['condition_id'] == id);
+    final before = _patientConditions.length;
+    _patientConditions.removeWhere((e) => e['id'] == id);
+    return before - _patientConditions.length;
+  }
+
+  Future<List<Map<String, dynamic>>> getConditionProgress(
+    String conditionId,
+  ) async {
+    return List<Map<String, dynamic>>.from(
+      _conditionProgress.where((e) => e['condition_id'] == conditionId),
+    )..sort(
+        (a, b) =>
+            ('${b['recorded_at']}').compareTo('${a['recorded_at']}'),
+      );
+  }
+
+  Future<String> addConditionProgress(Map<String, dynamic> entry) async {
+    final id = entry['id'] ?? _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    _conditionProgress.add({
+      'id': id,
+      'condition_id': entry['condition_id'],
+      'recorded_at': entry['recorded_at'] ?? now,
+      'cure_level': entry['cure_level'] ?? 0,
+      'notes': entry['notes'] ?? '',
+      'audio_path': entry['audio_path'] ?? '',
+      'created_at': entry['created_at'] ?? now,
+    });
+    final idx = _patientConditions.indexWhere(
+      (e) => e['id'] == entry['condition_id'],
+    );
+    if (idx != -1) {
+      _patientConditions[idx] = {
+        ..._patientConditions[idx],
+        'updated_at': now,
+      };
+    }
+    return id;
+  }
+
+  Future<int> deleteConditionProgress(String id) async {
+    final before = _conditionProgress.length;
+    _conditionProgress.removeWhere((e) => e['id'] == id);
+    return before - _conditionProgress.length;
+  }
+
+  Future<String> saveCureProgressAudio(
+    String sourcePath,
+    String patientId,
+    String conditionId,
+  ) async {
+    return sourcePath;
+  }
+
   // Helpers
   Future<List<Map<String, dynamic>>> getTodayAppointments() async {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -420,6 +514,37 @@ class DatabaseService {
 
   Future<void> clearInventoryOutputs() async {
     _inventoryOutputs.clear();
+  }
+
+  Future<List<Map<String, dynamic>>> getClinicExpenses() async {
+    return List<Map<String, dynamic>>.from(
+      _clinicExpenses
+        ..sort(
+          (a, b) =>
+              ('${b['expense_date']}').compareTo('${a['expense_date']}'),
+        ),
+    );
+  }
+
+  Future<String> addClinicExpense(Map<String, dynamic> data) async {
+    final id = data['id'] ?? _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    _clinicExpenses.add({
+      'id': id,
+      'category': data['category'] ?? 'other',
+      'description': data['description'] ?? '',
+      'amount': data['amount'] ?? 0.0,
+      'expense_date': data['expense_date'] ?? now,
+      'note': data['note'] ?? '',
+      'created_at': data['created_at'] ?? now,
+    });
+    return id;
+  }
+
+  Future<int> deleteClinicExpense(String id) async {
+    final before = _clinicExpenses.length;
+    _clinicExpenses.removeWhere((e) => e['id'] == id);
+    return before - _clinicExpenses.length;
   }
 
   Future<List<Map<String, dynamic>>> getAllPayments() async {

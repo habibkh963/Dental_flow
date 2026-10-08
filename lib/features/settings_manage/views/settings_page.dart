@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../core/colors.dart';
+import 'treatment_catalog_dialog.dart';
 
 class SettingsPage extends StatelessWidget {
   final SettingsController ctrl = Get.put(
@@ -23,16 +24,24 @@ class SettingsPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Settings',
+              'الإعدادات',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
 
             _tile(
+              icon: Icons.medical_services_outlined,
+              title: 'خطط العلاج والأسعار',
+              subtitle:
+                  'إدخال يدوي لأسماء الخطط وأسعارها (للفواتير وملف المريض)',
+              onTap: () => openTreatmentCatalogDialog(),
+            ),
+
+            _tile(
               icon: Icons.lock_outline,
               title: 'كلمة مرور للتطبيق',
               subtitle: 'تفعيل / تغيير كلمة المرور',
-              onTap: () => _showPasswordDialog(context),
+              onTap: () => _showPasswordDialog(context, ctrl),
             ),
 
             _tile(
@@ -163,10 +172,12 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-void _showPasswordDialog(BuildContext context) async {
+void _showPasswordDialog(
+  BuildContext context,
+  SettingsController controller,
+) async {
   final TextEditingController currentPassController = TextEditingController();
   final TextEditingController newPassController = TextEditingController();
-  final SettingsController controller = Get.find();
 
   // تحقق إذا فيه كلمة مرور موجودة
   final hasPassword = (controller.password)?.isNotEmpty ?? false;

@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/colors.dart';
 import '../../controller/daily_inventory_controller.dart';
+import '../../utils/clinic_expense_categories.dart';
+import '../../utils/money_format.dart';
 import 'daily_summary_card.dart';
 
 class _SummaryItem {
@@ -145,6 +147,11 @@ class DailySummaryGrid extends StatelessWidget {
           ),
           if (showDetails) ...[
             const SizedBox(height: 8),
+            _ExpenseBreakdown(
+              controller: controller,
+              monthLabel: monthLabel,
+            ),
+            const SizedBox(height: 8),
             LayoutBuilder(
               builder: (context, constraints) {
                 final crossAxisCount = constraints.maxWidth > 900 ? 3 : 2;
@@ -177,6 +184,80 @@ class DailySummaryGrid extends StatelessWidget {
             ),
           ],
         ],
+      );
+    });
+  }
+}
+
+class _ExpenseBreakdown extends StatelessWidget {
+  const _ExpenseBreakdown({
+    required this.controller,
+    required this.monthLabel,
+  });
+
+  final DailyInventoryController controller;
+  final String monthLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final inventoryOutputs = controller.displayedMonthInventoryOutputExpenses;
+      final byCategory = controller.displayedMonthExpenseBreakdown;
+      if (inventoryOutputs <= 0 && byCategory.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      final rows = <String, double>{
+        'مخرجات المخزون': inventoryOutputs,
+        ...{
+          for (final cat in ClinicExpenseCategory.all)
+            if ((byCategory[cat.id] ?? 0) > 0) cat.label: byCategory[cat.id]!,
+        },
+      };
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red.withOpacity(0.12)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'تفصيل النفقات · $monthLabel',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: rows.entries.map((entry) {
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${entry.key}: ${formatMoney(entry.value)}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
       );
     });
   }

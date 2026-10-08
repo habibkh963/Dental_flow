@@ -6,8 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/colors.dart';
+import '../../../settings_manage/controllers/treatment_catalog_controller.dart';
 import '../../controllers/appointment_dialog_controller.dart';
-import '../../models/appointment_status.dart';
+import '../../../shared/widgets/treatment_presentation_picker.dart';
 import 'appointment_form_field.dart';
 
 class AppointmentDialogWidget extends StatelessWidget {
@@ -147,25 +148,28 @@ class AppointmentDialogWidget extends StatelessWidget {
                   }),
                   const SizedBox(height: 20),
                   Obx(
-                    () => DropdownButtonFormField<String>(
-                      value: c.uiStatus.value,
-                      decoration: appointmentFieldDecoration(),
-                      items: kAppointmentStatusOptions
-                          .map(
-                            (option) => DropdownMenuItem(
-                              value: option.$1,
-                              child: Text(
-                                option.$2,
-                                style: GoogleFonts.poppins(),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          c.uiStatus.value = value;
-                        }
+                    () => TreatmentPresentationPicker(
+                      title: 'نوع التمثيل / العلاج',
+                      options:
+                          Get.find<TreatmentCatalogController>().planNames,
+                      emptyHint:
+                          'أضف خطط العلاج من الإعدادات ← خطط العلاج والأسعار',
+                      selected: c.selectedPresentations.toList(),
+                      allowMultiple: true,
+                      customController: c.customPresentationController,
+                      customHint: 'أو اكتب نوع تمثيل مخصص...',
+                      onChanged: (list) {
+                        c.selectedPresentations.assignAll(list);
+                        c.clearFormError();
                       },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'حالة المعاينة تُحدَّث من الرئيسية (مكتمل / ملغي) — لا حاجة لقائمة الحالة هنا.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
                     ),
                   ),
                   const SizedBox(height: 20),

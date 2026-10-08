@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/colors.dart';
 import '../controller/daily_inventory_controller.dart';
 import 'widgets/daily_month_picker.dart';
+import '../models/daily_inventory_tab.dart';
+import 'widgets/clinic_expenses_section.dart';
 import 'widgets/daily_outputs_section.dart';
 import 'widgets/daily_payments_list.dart';
 import 'widgets/daily_period_banner.dart';
@@ -46,11 +48,16 @@ class DailyInventoryPage extends GetView<DailyInventoryController> {
                 DailyTabBar(controller: controller),
                 const SizedBox(height: 12),
                 DailyPeriodBanner(controller: controller),
-                Obx(
-                  () => controller.isIncomes.value
-                      ? DailyPaymentsList(controller: controller)
-                      : DailyOutputsSection(controller: controller),
-                ),
+                Obx(() {
+                  switch (controller.selectedTab.value) {
+                    case DailyInventoryTab.payments:
+                      return DailyPaymentsList(controller: controller);
+                    case DailyInventoryTab.clinicExpenses:
+                      return ClinicExpensesSection(controller: controller);
+                    case DailyInventoryTab.outputs:
+                      return DailyOutputsSection(controller: controller);
+                  }
+                }),
                 const SizedBox(height: 16),
 
                 DailyPeriodFilter(controller: controller),

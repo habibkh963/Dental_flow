@@ -8,6 +8,7 @@ import 'features/auth/controllers/auth_controller.dart';
 import 'features/auth/screens/password_creen.dart';
 import 'features/home/views/widgets/app_shell.dart';
 import 'features/inventory_manage/controller/daily_inventory_controller.dart';
+import 'features/settings_manage/controllers/treatment_catalog_controller.dart';
 import 'services/app_notification_service.dart';
 import 'services/database_service.dart';
 
@@ -47,6 +48,7 @@ void main() async {
   await DatabaseService.instance.init();
   await AppNotificationService.instance.initialize();
   Get.put(DailyInventoryController());
+  Get.put(TreatmentCatalogController(), permanent: true);
   runApp(DentalClinic());
 }
 

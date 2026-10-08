@@ -201,6 +201,7 @@ class AppointmentsController extends GetxController {
       'date': values.date,
       'time': values.time,
       'status': values.status,
+      'presentation': values.presentation,
       'notes': values.notes,
     };
 

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/colors.dart';
 import '../../controller/daily_inventory_controller.dart';
+import '../../models/daily_inventory_tab.dart';
 
 class DailyTabBar extends StatelessWidget {
   const DailyTabBar({super.key, required this.controller});
@@ -13,7 +14,7 @@ class DailyTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final showPayments = controller.isIncomes.value;
+      final selected = controller.selectedTab.value;
 
       return Container(
         padding: const EdgeInsets.all(4),
@@ -25,13 +26,21 @@ class DailyTabBar extends StatelessWidget {
           children: [
             _tab(
               label: 'المخرجات',
-              selected: !showPayments,
-              onTap: () => controller.isIncomes.value = false,
+              selected: selected == DailyInventoryTab.outputs,
+              onTap: () => controller.selectedTab.value =
+                  DailyInventoryTab.outputs,
+            ),
+            _tab(
+              label: 'نفقات العيادة',
+              selected: selected == DailyInventoryTab.clinicExpenses,
+              onTap: () => controller.selectedTab.value =
+                  DailyInventoryTab.clinicExpenses,
             ),
             _tab(
               label: 'المدفوعات',
-              selected: showPayments,
-              onTap: () => controller.isIncomes.value = true,
+              selected: selected == DailyInventoryTab.payments,
+              onTap: () =>
+                  controller.selectedTab.value = DailyInventoryTab.payments,
             ),
           ],
         ),
@@ -52,12 +61,12 @@ class DailyTabBar extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(10),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
             child: Text(
               label,
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: selected ? Colors.white : AppColors.approvedColor,
               ),

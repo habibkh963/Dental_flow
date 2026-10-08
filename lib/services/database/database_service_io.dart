@@ -187,6 +187,42 @@ class DatabaseService {
       );
     ''');
 
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS patient_conditions (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
+        condition_name TEXT NOT NULL,
+        created_at TEXT,
+        updated_at TEXT,
+        FOREIGN KEY(patient_id) REFERENCES patients(id) ON DELETE CASCADE
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS condition_progress (
+        id TEXT PRIMARY KEY,
+        condition_id TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        cure_level INTEGER NOT NULL DEFAULT 0,
+        notes TEXT,
+        audio_path TEXT,
+        created_at TEXT,
+        FOREIGN KEY(condition_id) REFERENCES patient_conditions(id) ON DELETE CASCADE
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS clinic_expenses (
+        id TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        description TEXT,
+        amount REAL NOT NULL,
+        expense_date TEXT,
+        note TEXT,
+        created_at TEXT
+      );
+    ''');
+
     // Migration: ensure appointments table has 'materials_used' column (for older DBs)
     try {
       final cols = await db.rawQuery("PRAGMA table_info('appointments');");
@@ -221,6 +257,22 @@ class DatabaseService {
     } catch (_) {
       // ignore migration errors
     }
+
+    try {
+      final cols = await db.rawQuery("PRAGMA table_info('patients');");
+      if (!cols.any((c) => c['name'] == 'treatment_plan')) {
+        await db.execute('ALTER TABLE patients ADD COLUMN treatment_plan TEXT;');
+      }
+    } catch (_) {}
+
+    try {
+      final cols = await db.rawQuery("PRAGMA table_info('appointments');");
+      if (!cols.any((c) => c['name'] == 'presentation')) {
+        await db.execute(
+          'ALTER TABLE appointments ADD COLUMN presentation TEXT;',
+        );
+      }
+    } catch (_) {}
 
     // Migration: ensure invoice_lines table has 'material_id' column (for older DBs)
     try {
@@ -271,6 +323,7 @@ class DatabaseService {
       'dob': patient['dob'] ?? '',
       'address': patient['address'] ?? '',
       'diseases': patient['diseases'] ?? '',
+      'treatment_plan': patient['treatment_plan'] ?? '',
       'created_at': now,
       'updated_at': now,
     };
@@ -289,6 +342,24 @@ class DatabaseService {
   }
 
   Future<int> deletePatient(String id) async {
+    final conditionIds = await db.query(
+      'patient_conditions',
+      columns: ['id'],
+      where: 'patient_id = ?',
+      whereArgs: [id],
+    );
+    for (final row in conditionIds) {
+      await db.delete(
+        'condition_progress',
+        where: 'condition_id = ?',
+        whereArgs: [row['id']],
+      );
+    }
+    await db.delete(
+      'patient_conditions',
+      where: 'patient_id = ?',
+      whereArgs: [id],
+    );
     return await db.delete('patients', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -317,6 +388,7 @@ class DatabaseService {
       'time': appointment['time'] ?? '',
       'status': appointment['status'] ?? 'scheduled',
       'notes': appointment['notes'] ?? '',
+      'presentation': appointment['presentation'] ?? '',
       'materials_used': appointment['materials_used'] ?? '',
       'created_at': now,
       'updated_at': now,
@@ -808,6 +880,104 @@ class DatabaseService {
     return destPath;
   }
 
+  // Patient conditions & cure progress
+  Future<List<Map<String, dynamic>>> getPatientConditions(
+    String patientId,
+  ) async {
+    return await db.query(
+      'patient_conditions',
+      where: 'patient_id = ?',
+      whereArgs: [patientId],
+      orderBy: 'condition_name ASC',
+    );
+  }
+
+  Future<String> addPatientCondition(Map<String, dynamic> condition) async {
+    final id = condition['id'] ?? _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    await db.insert('patient_conditions', {
+      'id': id,
+      'patient_id': condition['patient_id'],
+      'condition_name': condition['condition_name'] ?? '',
+      'created_at': condition['created_at'] ?? now,
+      'updated_at': condition['updated_at'] ?? now,
+    });
+    return id;
+  }
+
+  Future<int> deletePatientCondition(String id) async {
+    await db.delete(
+      'condition_progress',
+      where: 'condition_id = ?',
+      whereArgs: [id],
+    );
+    return await db.delete(
+      'patient_conditions',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getConditionProgress(
+    String conditionId,
+  ) async {
+    return await db.query(
+      'condition_progress',
+      where: 'condition_id = ?',
+      whereArgs: [conditionId],
+      orderBy: 'recorded_at DESC',
+    );
+  }
+
+  Future<String> addConditionProgress(Map<String, dynamic> entry) async {
+    final id = entry['id'] ?? _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    await db.insert('condition_progress', {
+      'id': id,
+      'condition_id': entry['condition_id'],
+      'recorded_at': entry['recorded_at'] ?? now,
+      'cure_level': entry['cure_level'] ?? 0,
+      'notes': entry['notes'] ?? '',
+      'audio_path': entry['audio_path'] ?? '',
+      'created_at': entry['created_at'] ?? now,
+    });
+    await db.update(
+      'patient_conditions',
+      {'updated_at': now},
+      where: 'id = ?',
+      whereArgs: [entry['condition_id']],
+    );
+    return id;
+  }
+
+  Future<int> deleteConditionProgress(String id) async {
+    return await db.delete(
+      'condition_progress',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<String> saveCureProgressAudio(
+    String sourcePath,
+    String patientId,
+    String conditionId,
+  ) async {
+    final appDoc = await getApplicationSupportDirectory();
+    final dir = Directory(
+      p.join(appDoc.path, 'cure_audio', patientId, conditionId),
+    );
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    final ext = p.extension(sourcePath);
+    final fileName =
+        'recording_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}${ext.isEmpty ? '.m4a' : ext}';
+    final destPath = p.join(dir.path, fileName);
+    await File(sourcePath).copy(destPath);
+    return destPath;
+  }
+
   // Helpers
   Future<List<Map<String, dynamic>>> getTodayAppointments() async {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -820,9 +990,11 @@ class DatabaseService {
         a.time, 
         a.status, 
         a.notes,
+        a.presentation,
         p.first_name,
         p.last_name,
-        p.phone
+        p.phone,
+        p.treatment_plan
       FROM appointments a
       JOIN patients p ON a.patient_id = p.id
       WHERE a.date = ?
@@ -852,6 +1024,9 @@ class DatabaseService {
       await txn.delete('appointment_materials');
       await txn.delete('appointments');
       await txn.delete('inventory');
+      await txn.delete('condition_progress');
+      await txn.delete('patient_conditions');
+      await txn.delete('clinic_expenses');
 
       await txn.delete('patients');
     });
@@ -942,6 +1117,30 @@ class DatabaseService {
 
   Future<void> clearInventoryOutputs() async {
     await db.delete('inventory_outputs');
+  }
+
+  // Clinic operating expenses (cleaning, lab, supplies, salaries, etc.)
+  Future<List<Map<String, dynamic>>> getClinicExpenses() async {
+    return await db.query('clinic_expenses', orderBy: 'expense_date DESC');
+  }
+
+  Future<String> addClinicExpense(Map<String, dynamic> data) async {
+    final id = data['id'] ?? _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    await db.insert('clinic_expenses', {
+      'id': id,
+      'category': data['category'] ?? 'other',
+      'description': data['description'] ?? '',
+      'amount': data['amount'] ?? 0.0,
+      'expense_date': data['expense_date'] ?? now,
+      'note': data['note'] ?? '',
+      'created_at': data['created_at'] ?? now,
+    });
+    return id;
+  }
+
+  Future<int> deleteClinicExpense(String id) async {
+    return await db.delete('clinic_expenses', where: 'id = ?', whereArgs: [id]);
   }
 
   // Simplified getAllPayments if not already present

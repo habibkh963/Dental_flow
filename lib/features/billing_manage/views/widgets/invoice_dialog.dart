@@ -4,15 +4,18 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/colors.dart';
+import '../../../settings_manage/controllers/treatment_catalog_controller.dart';
 import '../../controllers/invoice_dialog_controller.dart';
 import '../../controllers/invoices_controller.dart';
-import '../../utils/billing_input.dart';
 import 'billing_form_field.dart';
 
 void openInvoiceDialog({Map<String, dynamic>? patient}) {
   const flowTag = 'standalone_invoice_flow';
   if (!Get.isRegistered<InvoicesController>(tag: flowTag)) {
     Get.put(InvoicesController(), tag: flowTag, permanent: false);
+  }
+  if (!Get.isRegistered<TreatmentCatalogController>()) {
+    Get.put(TreatmentCatalogController(), permanent: true);
   }
   Get.find<InvoicesController>(tag: flowTag)
       .openCreateInvoiceDialog(patient: patient);
@@ -156,14 +159,39 @@ class InvoiceDialog extends GetView<InvoiceDialogController> {
                 style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 10),
-              Obx(
-                () => Wrap(
+              Obx(() {
+                final selectedNames =
+                    List<String>.from(controller.selectedTreatments);
+
+                if (!Get.isRegistered<TreatmentCatalogController>()) {
+                  return Text(
+                    'افتح الإعدادات لتحميل خطط العلاج',
+                    style: GoogleFonts.poppins(color: Colors.grey),
+                  );
+                }
+
+                final catalogCtrl = Get.find<TreatmentCatalogController>();
+                catalogCtrl.loading.value;
+                final treatments = catalogCtrl.items
+                    .map((e) => {'name': e.name, 'price': e.price})
+                    .toList();
+
+                if (treatments.isEmpty) {
+                  return Text(
+                    'لا توجد خطط علاج — أضفها من الإعدادات ← خطط العلاج والأسعار',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                    ),
+                  );
+                }
+                return Wrap(
                   spacing: 12,
                   runSpacing: 12,
-                  children: kDentalTreatments.map((treatment) {
+                  children: treatments.map((treatment) {
                     final name = treatment['name'] as String;
-                    final isSelected =
-                        controller.selectedTreatments.contains(name);
+                    final price = (treatment['price'] as num?)?.toDouble() ?? 0;
+                    final isSelected = selectedNames.contains(name);
 
                     return GestureDetector(
                       onTap: () => controller.selectTreatment(name),
@@ -194,7 +222,9 @@ class InvoiceDialog extends GetView<InvoiceDialogController> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${(treatment['price'] as num).toStringAsFixed(0)} ل.س',
+                              price > 0
+                                  ? '${price.toStringAsFixed(0)} ل.س'
+                                  : 'سعر غير محدد',
                               style: GoogleFonts.poppins(
                                 color: isSelected
                                     ? Colors.white70
@@ -207,8 +237,8 @@ class InvoiceDialog extends GetView<InvoiceDialogController> {
                       ),
                     );
                   }).toList(),
-                ),
-              ),
+                );
+              }),
               const SizedBox(height: 20),
               TextField(
                 controller: controller.priceController,

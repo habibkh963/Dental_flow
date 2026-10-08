@@ -5,58 +5,11 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/colors.dart';
+import '../../../../core/patient_medical_conditions.dart';
+import '../../../settings_manage/controllers/treatment_catalog_controller.dart';
+import '../../../shared/widgets/treatment_presentation_picker.dart';
 import '../../controller/patients_controller.dart';
-
-List<String> diseasesList = [
-  'داء السكري',
-  'ارتفاع ضغط الدم',
-  'أمراض القلب',
-  'الربو',
-  'فقر الدم',
-  'اضطرابات التخثر',
-  'نقص المناعة',
-  'الحمل',
-
-  // حالات متعلقة بالفم والأسنان
-  'التهاب اللثة',
-  'أمراض دواعم السن',
-  'تسوس الأسنان',
-  'حساسية الأسنان',
-  'جفاف الفم',
-  'صرير الأسنان',
-  'قلق علاج الأسنان',
-  'رهاب طبيب الأسنان',
-  'نزيف اللثة',
-  'رائحة الفم الكريهة',
-
-  // حالات فموية خاصة
-  'تقرحات الفم',
-  'القلاع الفموي',
-  'اللسان الجغرافي',
-  'تشقق اللسان',
-  'الطلاوة الفموية',
-  'الحزاز الفموي',
-  'سرطان الفم',
-
-  // مشاكل المفصل والفك
-  'اضطرابات المفصل الفكي الصدغي',
-  'آلام الفك',
-  'تيبس الفك',
-
-  // حالات مرتبطة بالعلاج
-  'حساسية التخدير الموضعي',
-  'حساسية الأدوية',
-  'التهابات بعد خلع الأسنان',
-  'فشل زراعة الأسنان',
-  'التهاب حول الزرعات',
-
-  // أمراض عامة تؤثر على علاج الأسنان
-  'الصرع',
-  'أمراض الكبد',
-  'أمراض الكلى',
-  'هشاشة العظام',
-  'أمراض الغدة الدرقية',
-];
+import '../../utils/patient_treatment_plan_utils.dart';
 
 Future<void> openPatientDialog(
   BuildContext context,
@@ -71,12 +24,28 @@ Future<void> openPatientDialog(
   final email = TextEditingController(text: existing?['email'] ?? '');
   final address = TextEditingController(text: existing?['address'] ?? '');
 
-  // Parse diseases from existing
-  final existingDiseases = existing?['diseases'] ?? '';
-  final selectedDiseases = existingDiseases.isNotEmpty
-      ? existingDiseases.split(',').map((s) => s.trim()).toList()
-      : <String>[];
+  if (!Get.isRegistered<TreatmentCatalogController>()) {
+    Get.put(TreatmentCatalogController(), permanent: true);
+  }
+  final treatmentCatalog = Get.find<TreatmentCatalogController>();
+  final treatmentOptions = treatmentCatalog.planNames;
+
+  final selectedDiseases =
+      parseMedicalConditions(existing?['diseases']?.toString());
+  final diseaseSuggestions = <String>[
+    ...kMedicalConditionSuggestions,
+    ...selectedDiseases.where(
+      (d) => !kMedicalConditionSuggestions.contains(d),
+    ),
+  ];
+
   final customDiseaseController = TextEditingController();
+  final customTreatmentController = TextEditingController();
+
+  final selectedTreatments = parseTreatmentPlanItems(
+    existing?['treatment_plan']?.toString(),
+    excludeLabels: selectedDiseases,
+  );
 
   await showDialog(
     context: context,
@@ -118,6 +87,40 @@ Future<void> openPatientDialog(
                     _field(address, "العنوان", maxLines: 2),
                     const SizedBox(height: 18),
 
+                    TreatmentPresentationPicker(
+                      title: 'خطة التمثيل / العلاج',
+                      options: treatmentOptions,
+                      emptyHint:
+                          'أضف خطط العلاج من الإعدادات ← خطط العلاج والأسعار',
+                      selected: selectedTreatments,
+                      allowMultiple: true,
+                      customController: customTreatmentController,
+                      customHint: 'أو اكتب خطة علاج مخصصة...',
+                      onChanged: (list) {
+                        final diseaseSet = selectedDiseases
+                            .map((d) => d.toLowerCase())
+                            .toSet();
+                        selectedTreatments
+                          ..clear()
+                          ..addAll(
+                            list.where(
+                              (item) =>
+                                  !diseaseSet.contains(item.toLowerCase()),
+                            ),
+                          );
+                        (ctx as Element).markNeedsBuild();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'خطة العلاج منفصلة عن الحالات الطبية — الأسعار من الإعدادات.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
                     /// Diseases Section
                     Align(
                       alignment: Alignment.centerLeft,
@@ -128,6 +131,14 @@ Future<void> openPatientDialog(
                           fontWeight: FontWeight.w600,
                           color: AppColors.mainColor,
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'للتاريخ الطبي فقط — لا تُضاف إلى خطة العلاج ولا للفواتير.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -142,12 +153,13 @@ Future<void> openPatientDialog(
                             onSubmitted: (val) {
                               final v = val.trim();
                               if (v.isEmpty) return;
-                              if (!selectedDiseases.contains(v))
+                              if (!selectedDiseases.contains(v)) {
                                 selectedDiseases.add(v);
-                              if (!diseasesList.contains(v))
-                                diseasesList.add(v);
+                              }
+                              if (!diseaseSuggestions.contains(v)) {
+                                diseaseSuggestions.add(v);
+                              }
                               customDiseaseController.clear();
-                              // rebuild
                               (ctx as Element).markNeedsBuild();
                             },
                           ),
@@ -164,12 +176,13 @@ Future<void> openPatientDialog(
                             onPressed: () {
                               final v = customDiseaseController.text.trim();
                               if (v.isEmpty) return;
-                              if (!selectedDiseases.contains(v))
+                              if (!selectedDiseases.contains(v)) {
                                 selectedDiseases.add(v);
-                              if (!diseasesList.contains(v))
-                                diseasesList.add(v);
+                              }
+                              if (!diseaseSuggestions.contains(v)) {
+                                diseaseSuggestions.add(v);
+                              }
                               customDiseaseController.clear();
-                              // rebuild
                               (ctx as Element).markNeedsBuild();
                             },
                           ),
@@ -181,7 +194,7 @@ Future<void> openPatientDialog(
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: diseasesList.map((disease) {
+                      children: diseaseSuggestions.map((disease) {
                         final isSelected = selectedDiseases.contains(disease);
                         return FilterChip(
                           label: Text(
@@ -233,6 +246,20 @@ Future<void> openPatientDialog(
                             ),
                           ),
                           onPressed: () async {
+                            final diseaseSet = selectedDiseases
+                                .map((d) => d.toLowerCase())
+                                .toSet();
+                            final plans = List<String>.from(selectedTreatments);
+                            final customPlan =
+                                customTreatmentController.text.trim();
+                            if (customPlan.isNotEmpty &&
+                                !plans.contains(customPlan) &&
+                                !diseaseSet.contains(customPlan.toLowerCase())) {
+                              plans.add(customPlan);
+                            }
+                            plans.removeWhere(
+                              (p) => diseaseSet.contains(p.toLowerCase()),
+                            );
                             final data = {
                               'first_name': first.text.trim(),
                               'last_name': last.text.trim(),
@@ -240,6 +267,7 @@ Future<void> openPatientDialog(
                               'email': email.text.trim(),
                               'address': address.text.trim(),
                               'diseases': selectedDiseases.join(', '),
+                              'treatment_plan': plans.join('، '),
                             };
 
                             if (isEdit) {

@@ -1,4 +1,5 @@
 import '../models/daily_financial_summary.dart';
+import 'clinic_expense_categories.dart';
 import 'daily_inventory_date.dart';
 
 typedef DatePredicate = bool Function(DateTime date);
@@ -91,6 +92,45 @@ double sumOutputExpenses(
   return total;
 }
 
+double sumClinicExpenses(
+  List<Map<String, dynamic>> expenses, {
+  DatePredicate? whereDate,
+}) {
+  var total = 0.0;
+  for (final expense in expenses) {
+    final date = parseRecordDate(expense['expense_date'] ?? expense['created_at']);
+    if (date == null) continue;
+    if (whereDate != null && !whereDate(date)) continue;
+    total += toMoney(expense['amount']);
+  }
+  return total;
+}
+
+double sumAllExpenses({
+  required List<Map<String, dynamic>> outputs,
+  required List<Map<String, dynamic>> clinicExpenses,
+  DatePredicate? whereDate,
+}) {
+  return sumOutputExpenses(outputs, whereDate: whereDate) +
+      sumClinicExpenses(clinicExpenses, whereDate: whereDate);
+}
+
+Map<String, double> sumClinicExpensesByCategory(
+  List<Map<String, dynamic>> expenses, {
+  DatePredicate? whereDate,
+}) {
+  final totals = <String, double>{};
+  for (final expense in expenses) {
+    final date = parseRecordDate(expense['expense_date'] ?? expense['created_at']);
+    if (date == null) continue;
+    if (whereDate != null && !whereDate(date)) continue;
+    final raw = expense['category']?.toString() ?? 'other';
+    final category = ClinicExpenseCategory.byId(raw).id;
+    totals[category] = (totals[category] ?? 0) + toMoney(expense['amount']);
+  }
+  return totals;
+}
+
 class DailyFinancialReport {
   final DailyFinancialSummary daily;
   final DailyFinancialSummary monthly;
@@ -107,23 +147,30 @@ DailyFinancialSummary computeSummaryForMonth({
   required List<Map<String, dynamic>> invoices,
   required List<Map<String, dynamic>> payments,
   required List<Map<String, dynamic>> outputs,
+  required List<Map<String, dynamic>> clinicExpenses,
   required DateTime month,
 }) {
   final reference = startOfMonth(month);
   final paymentsByInvoice = groupPaymentsByInvoice(payments);
   bool inMonth(DateTime date) => isSameMonth(date, reference);
 
+  final expenses = sumAllExpenses(
+    outputs: outputs,
+    clinicExpenses: clinicExpenses,
+    whereDate: inMonth,
+  );
+  final received = sumPayments(payments, whereDate: inMonth);
+
   return DailyFinancialSummary(
     invoicesTotal: sumInvoiceTotals(invoices, whereDate: inMonth),
-    paymentsReceived: sumPayments(payments, whereDate: inMonth),
+    paymentsReceived: received,
     outstanding: sumOutstanding(
       invoices,
       paymentsByInvoice,
       whereInvoiceDate: inMonth,
     ),
-    expenses: sumOutputExpenses(outputs, whereDate: inMonth),
-    netCashFlow: sumPayments(payments, whereDate: inMonth) -
-        sumOutputExpenses(outputs, whereDate: inMonth),
+    expenses: expenses,
+    netCashFlow: received - expenses,
   );
 }
 
@@ -131,6 +178,7 @@ List<DateTime> collectAvailableHistoryMonths({
   required List<Map<String, dynamic>> invoices,
   required List<Map<String, dynamic>> payments,
   required List<Map<String, dynamic>> outputs,
+  List<Map<String, dynamic>> clinicExpenses = const [],
 }) {
   final dates = <DateTime>[];
 
@@ -146,6 +194,10 @@ List<DateTime> collectAvailableHistoryMonths({
     final date = parseRecordDate(output['date'] ?? output['created_at']);
     if (date != null) dates.add(date);
   }
+  for (final expense in clinicExpenses) {
+    final date = parseRecordDate(expense['expense_date'] ?? expense['created_at']);
+    if (date != null) dates.add(date);
+  }
 
   if (dates.isEmpty) {
     return enumerateMonths();
@@ -159,22 +211,29 @@ DailyFinancialReport computeFinancialReport({
   required List<Map<String, dynamic>> invoices,
   required List<Map<String, dynamic>> payments,
   required List<Map<String, dynamic>> outputs,
+  List<Map<String, dynamic>> clinicExpenses = const [],
 }) {
   final paymentsByInvoice = groupPaymentsByInvoice(payments);
   final now = DateTime.now();
 
   DailyFinancialSummary forPredicate(DatePredicate? predicate) {
+    final expenses = sumAllExpenses(
+      outputs: outputs,
+      clinicExpenses: clinicExpenses,
+      whereDate: predicate,
+    );
+    final received = sumPayments(payments, whereDate: predicate);
+
     return DailyFinancialSummary(
       invoicesTotal: sumInvoiceTotals(invoices, whereDate: predicate),
-      paymentsReceived: sumPayments(payments, whereDate: predicate),
+      paymentsReceived: received,
       outstanding: sumOutstanding(
         invoices,
         paymentsByInvoice,
         whereInvoiceDate: predicate,
       ),
-      expenses: sumOutputExpenses(outputs, whereDate: predicate),
-      netCashFlow: sumPayments(payments, whereDate: predicate) -
-          sumOutputExpenses(outputs, whereDate: predicate),
+      expenses: expenses,
+      netCashFlow: received - expenses,
     );
   }
 
@@ -188,6 +247,7 @@ DailyFinancialReport computeFinancialReport({
 DailyPeriodFilterSummary computePeriodFilterSummary({
   required List<Map<String, dynamic>> payments,
   required List<Map<String, dynamic>> outputs,
+  List<Map<String, dynamic>> clinicExpenses = const [],
   required DateTime start,
   required DateTime end,
 }) {
@@ -212,12 +272,21 @@ DailyPeriodFilterSummary computePeriodFilterSummary({
     outputsCount++;
   }
 
+  var clinicExpensesCount = 0;
+  for (final expense in clinicExpenses) {
+    final date = parseRecordDate(expense['expense_date'] ?? expense['created_at']);
+    if (date == null || !inRange(date)) continue;
+    expensesTotal += toMoney(expense['amount']);
+    clinicExpensesCount++;
+  }
+
   return DailyPeriodFilterSummary(
     paymentsTotal: paymentsTotal,
     expensesTotal: expensesTotal,
     netTotal: paymentsTotal - expensesTotal,
     paymentsCount: paymentsCount,
     outputsCount: outputsCount,
+    clinicExpensesCount: clinicExpensesCount,
   );
 }
 

@@ -1,3 +1,4 @@
+
 class InvoiceFormValues {
   final String patientId;
   final String typeOfTreatment;
@@ -25,15 +26,6 @@ class PaymentFormValues {
 }
 
 const kPaymentMethods = ['نقدي', 'بطاقة', 'تحويل'];
-
-const kDentalTreatments = [
-  {'name': 'كشفية', 'price': 5000},
-  {'name': 'حشو عادي', 'price': 15000},
-  {'name': 'حشو عصب', 'price': 40000},
-  {'name': 'قلع سن', 'price': 20000},
-  {'name': 'تنظيف', 'price': 25000},
-  {'name': 'تقويم (تقديري)', 'price': 150000},
-];
 
 ({InvoiceFormValues? values, String? error}) tryParseInvoiceForm({
   required String? patientId,
@@ -108,12 +100,16 @@ const kDentalTreatments = [
   );
 }
 
-double sumTreatmentPrices(List<String> treatmentNames) {
+double sumTreatmentPrices(
+  List<String> treatmentNames,
+  List<Map<String, dynamic>> catalog,
+) {
   var sum = 0.0;
   for (final name in treatmentNames) {
-    for (final treatment in kDentalTreatments) {
-      if (treatment['name'] == name) {
-        sum += (treatment['price'] as num).toDouble();
+    for (final treatment in catalog) {
+      if (treatment['name']?.toString().trim().toLowerCase() ==
+          name.trim().toLowerCase()) {
+        sum += (treatment['price'] as num?)?.toDouble() ?? 0;
         break;
       }
     }

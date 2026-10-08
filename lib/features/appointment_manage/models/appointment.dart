@@ -7,6 +7,7 @@ class Appointment {
   final String date;
   final String time;
   final AppointmentStatus status;
+  final String presentation;
   final String notes;
 
   const Appointment({
@@ -16,6 +17,7 @@ class Appointment {
     required this.date,
     required this.time,
     required this.status,
+    this.presentation = '',
     required this.notes,
   });
 
@@ -30,6 +32,7 @@ class Appointment {
       date: map['date']?.toString() ?? '',
       time: map['time']?.toString() ?? '',
       status: AppointmentStatusParsing.fromString(map['status']?.toString()),
+      presentation: map['presentation']?.toString() ?? '',
       notes: map['notes']?.toString() ?? '',
     );
   }

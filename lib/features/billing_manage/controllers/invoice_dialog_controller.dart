@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../core/colors.dart';
 import '../../../services/database_service.dart';
+import '../../settings_manage/controllers/treatment_catalog_controller.dart';
 import '../utils/billing_input.dart';
 import 'invoices_controller.dart';
 
@@ -82,7 +83,9 @@ class InvoiceDialogController extends GetxController {
   }
 
   void _syncPriceFromTreatments() {
-    final total = sumTreatmentPrices(selectedTreatments);
+    if (!Get.isRegistered<TreatmentCatalogController>()) return;
+    final catalog = Get.find<TreatmentCatalogController>().forBilling;
+    final total = sumTreatmentPrices(selectedTreatments, catalog);
     priceController.text = total > 0 ? total.toStringAsFixed(0) : '';
   }
 

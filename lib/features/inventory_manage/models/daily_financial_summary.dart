@@ -38,6 +38,7 @@ class DailyPeriodFilterSummary {
   final double netTotal;
   final int paymentsCount;
   final int outputsCount;
+  final int clinicExpensesCount;
 
   const DailyPeriodFilterSummary({
     required this.paymentsTotal,
@@ -45,7 +46,10 @@ class DailyPeriodFilterSummary {
     required this.netTotal,
     required this.paymentsCount,
     required this.outputsCount,
+    this.clinicExpensesCount = 0,
   });
+
+  int get totalExpenseEntries => outputsCount + clinicExpensesCount;
 
   static const empty = DailyPeriodFilterSummary(
     paymentsTotal: 0,
@@ -53,5 +57,6 @@ class DailyPeriodFilterSummary {
     netTotal: 0,
     paymentsCount: 0,
     outputsCount: 0,
+    clinicExpensesCount: 0,
   );
 }

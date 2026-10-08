@@ -52,6 +52,13 @@ dependencies:
   flutter_local_notifications: ^17.2.4
   get_storage: ^2.1.1
   alphabet_list_view:
+  record: ^5.2.0
+
+dependency_overrides:
+  # Align federated record plugins: pub can pick linux 0.7 + interface 1.6,
+  # which fails compilation even on Windows builds.
+  record_platform_interface: 1.4.0
+  record_linux: 1.2.1
 
 dev_dependencies:
   flutter_test:

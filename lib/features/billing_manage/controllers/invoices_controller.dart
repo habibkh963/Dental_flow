@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/colors.dart';
 import '../../../services/database_service.dart';
+import '../../settings_manage/controllers/treatment_catalog_controller.dart';
 import '../models/invoice.dart';
 import '../utils/billing_input.dart';
 import '../views/widgets/invoice_dialog.dart';
@@ -154,6 +155,10 @@ class InvoicesController extends GetxController {
     final tag = InvoiceDialogController.dialogTag;
     if (Get.isRegistered<InvoiceDialogController>(tag: tag)) {
       Get.delete<InvoiceDialogController>(tag: tag);
+    }
+
+    if (!Get.isRegistered<TreatmentCatalogController>()) {
+      Get.put(TreatmentCatalogController(), permanent: true);
     }
 
     Get.put(

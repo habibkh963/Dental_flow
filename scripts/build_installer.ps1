@@ -11,6 +11,7 @@ $version = ($versionLine.Line -split "\s+")[1].Split("+")[0]
 Write-Host "Building Dental Flow v$version ..."
 
 flutter pub get
+& "$PSScriptRoot\patch_windows_plugins.ps1"
 flutter build windows --release --build-name=$version
 
 $buildDir = Join-Path $repoRoot "build\windows\x64\runner\Release"

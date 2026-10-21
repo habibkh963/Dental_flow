@@ -147,14 +147,26 @@ class AppointmentDialogWidget extends StatelessWidget {
                     );
                   }),
                   const SizedBox(height: 20),
-                  Obx(
-                    () => TreatmentPresentationPicker(
+                  Obx(() {
+                    final selected =
+                        List<String>.from(c.selectedPresentations);
+                    final options = Get.isRegistered<TreatmentCatalogController>()
+                        ? Get.find<TreatmentCatalogController>()
+                            .items
+                            .map((e) => e.name)
+                            .where((n) => n.trim().isNotEmpty)
+                            .toList()
+                        : <String>[];
+                    if (Get.isRegistered<TreatmentCatalogController>()) {
+                      Get.find<TreatmentCatalogController>().loading.value;
+                    }
+
+                    return TreatmentPresentationPicker(
                       title: 'نوع التمثيل / العلاج',
-                      options:
-                          Get.find<TreatmentCatalogController>().planNames,
+                      options: options,
                       emptyHint:
                           'أضف خطط العلاج من الإعدادات ← خطط العلاج والأسعار',
-                      selected: c.selectedPresentations.toList(),
+                      selected: selected,
                       allowMultiple: true,
                       customController: c.customPresentationController,
                       customHint: 'أو اكتب نوع تمثيل مخصص...',
@@ -162,8 +174,8 @@ class AppointmentDialogWidget extends StatelessWidget {
                         c.selectedPresentations.assignAll(list);
                         c.clearFormError();
                       },
-                    ),
-                  ),
+                    );
+                  }),
                   const SizedBox(height: 8),
                   Text(
                     'حالة المعاينة تُحدَّث من الرئيسية (مكتمل / ملغي) — لا حاجة لقائمة الحالة هنا.',
@@ -173,12 +185,8 @@ class AppointmentDialogWidget extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Obx(() {
-                    if (!c.showMaterials) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return Column(
+                  if (c.showMaterials)
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Obx(() {
@@ -275,8 +283,7 @@ class AppointmentDialogWidget extends StatelessWidget {
                           );
                         }),
                       ],
-                    );
-                  }),
+                    ),
                   const SizedBox(height: 20),
                   TextField(
                     controller: c.notesController,

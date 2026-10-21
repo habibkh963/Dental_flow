@@ -38,11 +38,18 @@ AppId={{CDC115CE-CAAD-429F-8BC4-FC658D042DB6}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+; Default suggestion only — user can change folder on the wizard (Browse…).
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+; Always show "Select Destination Location" (do not skip on reinstall).
+DisableDirPage=no
+UsePreviousAppDir=no
+AllowRootDirectory=yes
+EnableDirDoesntExistWarning=yes
+DirExistsWarning=auto
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename={#OutputBaseFilename}

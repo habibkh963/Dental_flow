@@ -30,13 +30,12 @@ Future<void> openPatientDialog(
   final treatmentCatalog = Get.find<TreatmentCatalogController>();
   final treatmentOptions = treatmentCatalog.planNames;
 
-  final selectedDiseases =
-      parseMedicalConditions(existing?['diseases']?.toString());
+  final selectedDiseases = parseMedicalConditions(
+    existing?['diseases']?.toString(),
+  );
   final diseaseSuggestions = <String>[
     ...kMedicalConditionSuggestions,
-    ...selectedDiseases.where(
-      (d) => !kMedicalConditionSuggestions.contains(d),
-    ),
+    ...selectedDiseases.where((d) => !kMedicalConditionSuggestions.contains(d)),
   ];
 
   final customDiseaseController = TextEditingController();
@@ -111,14 +110,7 @@ Future<void> openPatientDialog(
                         (ctx as Element).markNeedsBuild();
                       },
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'خطة العلاج منفصلة عن الحالات الطبية — الأسعار من الإعدادات.',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
+
                     const SizedBox(height: 18),
 
                     /// Diseases Section
@@ -250,11 +242,13 @@ Future<void> openPatientDialog(
                                 .map((d) => d.toLowerCase())
                                 .toSet();
                             final plans = List<String>.from(selectedTreatments);
-                            final customPlan =
-                                customTreatmentController.text.trim();
+                            final customPlan = customTreatmentController.text
+                                .trim();
                             if (customPlan.isNotEmpty &&
                                 !plans.contains(customPlan) &&
-                                !diseaseSet.contains(customPlan.toLowerCase())) {
+                                !diseaseSet.contains(
+                                  customPlan.toLowerCase(),
+                                )) {
                               plans.add(customPlan);
                             }
                             plans.removeWhere(

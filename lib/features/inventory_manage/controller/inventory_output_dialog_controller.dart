@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../models/inventory_item.dart';
 import 'daily_inventory_controller.dart';
 
 class InventoryOutputDialogController extends GetxController {
@@ -12,19 +13,37 @@ class InventoryOutputDialogController extends GetxController {
 
   final itemNameController = TextEditingController();
   final quantityController = TextEditingController();
-  final unitController = TextEditingController();
+  final customUnitController = TextEditingController();
   final priceController = TextEditingController();
+
+  final selectedUnit = kDefaultInventoryUnit.obs;
+  final useCustomUnit = false.obs;
 
   final saving = false.obs;
   final formError = RxnString();
 
+  String get effectiveUnit => useCustomUnit.value
+      ? customUnitController.text.trim()
+      : selectedUnit.value;
+
   void clearFormError() => formError.value = null;
+
+  void selectPresetUnit(String unit) {
+    useCustomUnit.value = false;
+    selectedUnit.value = unit;
+    clearFormError();
+  }
+
+  void selectCustomUnit() {
+    useCustomUnit.value = true;
+    clearFormError();
+  }
 
   @override
   void onClose() {
     itemNameController.dispose();
     quantityController.dispose();
-    unitController.dispose();
+    customUnitController.dispose();
     priceController.dispose();
     super.onClose();
   }
@@ -32,7 +51,7 @@ class InventoryOutputDialogController extends GetxController {
   Future<void> submit(BuildContext context) async {
     final itemName = itemNameController.text.trim();
     final quantity = double.tryParse(quantityController.text.trim()) ?? 0;
-    final unit = unitController.text.trim();
+    final unit = effectiveUnit;
     final price = double.tryParse(priceController.text.trim()) ?? 0;
 
     if (itemName.isEmpty) {

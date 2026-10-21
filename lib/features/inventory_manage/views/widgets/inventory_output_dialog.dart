@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/colors.dart';
 import '../../controller/inventory_output_dialog_controller.dart';
 import 'inventory_form_field.dart';
+import 'inventory_unit_selector.dart';
 
 class InventoryOutputDialog extends StatelessWidget {
   const InventoryOutputDialog({
@@ -49,10 +50,13 @@ class InventoryOutputDialog extends StatelessWidget {
                 onChanged: (_) => c.clearFormError(),
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: c.unitController,
-                decoration: inventoryFieldDecoration('الوحدة (كيس، علبة...)'),
-                onChanged: (_) => c.clearFormError(),
+              InventoryUnitSelector(
+                selectedUnit: c.selectedUnit,
+                useCustomUnit: c.useCustomUnit,
+                customUnitController: c.customUnitController,
+                onPresetSelected: c.selectPresetUnit,
+                onCustomSelected: c.selectCustomUnit,
+                onCustomChanged: (_) => c.clearFormError(),
               ),
               const SizedBox(height: 12),
               TextField(

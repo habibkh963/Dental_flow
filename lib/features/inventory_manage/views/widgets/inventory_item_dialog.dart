@@ -5,8 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/colors.dart';
 import '../../controller/inventory_item_dialog_controller.dart';
-import '../../models/inventory_item.dart';
 import 'inventory_form_field.dart';
+import 'inventory_unit_selector.dart';
 
 class InventoryItemDialog extends GetView<InventoryItemDialogController> {
   const InventoryItemDialog({super.key});
@@ -53,7 +53,14 @@ class InventoryItemDialog extends GetView<InventoryItemDialogController> {
                 decoration: inventoryFieldDecoration('الكمية'),
               ),
               const SizedBox(height: 12),
-              _UnitSelector(controller: controller),
+              InventoryUnitSelector(
+                selectedUnit: controller.selectedUnit,
+                useCustomUnit: controller.useCustomUnit,
+                customUnitController: controller.customUnitController,
+                onPresetSelected: controller.selectPresetUnit,
+                onCustomSelected: controller.selectCustomUnit,
+                onCustomChanged: controller.onCustomUnitChanged,
+              ),
               const SizedBox(height: 12),
               Obx(() {
                 controller.unitLabelTick.value;
@@ -121,62 +128,3 @@ class InventoryItemDialog extends GetView<InventoryItemDialogController> {
   }
 }
 
-class _UnitSelector extends StatelessWidget {
-  const _UnitSelector({required this.controller});
-
-  final InventoryItemDialogController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'الوحدة',
-          style: GoogleFonts.poppins(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Obx(
-          () => Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ...kInventoryUnits.map(
-                (unit) => ChoiceChip(
-                  label: Text(unit, style: GoogleFonts.poppins(fontSize: 12)),
-                  selected: !controller.useCustomUnit.value &&
-                      controller.selectedUnit.value == unit,
-                  onSelected: (_) => controller.selectPresetUnit(unit),
-                  selectedColor: AppColors.mainColor.withOpacity(0.2),
-                ),
-              ),
-              ChoiceChip(
-                label: Text('أخرى', style: GoogleFonts.poppins(fontSize: 12)),
-                selected: controller.useCustomUnit.value,
-                onSelected: (_) => controller.selectCustomUnit(),
-                selectedColor: AppColors.mainColor.withOpacity(0.2),
-              ),
-            ],
-          ),
-        ),
-        Obx(() {
-          if (!controller.useCustomUnit.value) {
-            return const SizedBox.shrink();
-          }
-          return Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: TextField(
-              controller: controller.customUnitController,
-              decoration: inventoryFieldDecoration('اسم الوحدة'),
-              onChanged: controller.onCustomUnitChanged,
-            ),
-          );
-        }),
-      ],
-    );
-  }
-}

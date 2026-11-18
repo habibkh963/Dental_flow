@@ -4,12 +4,14 @@ class InvoiceFormValues {
   final String typeOfTreatment;
   final double total;
   final String status;
+  final String currency;
 
   const InvoiceFormValues({
     required this.patientId,
     required this.typeOfTreatment,
     required this.total,
     required this.status,
+    this.currency = 'SYP',
   });
 }
 
@@ -17,11 +19,13 @@ class PaymentFormValues {
   final double amount;
   final String method;
   final String note;
+  final String currency;
 
   const PaymentFormValues({
     required this.amount,
     required this.method,
     required this.note,
+    this.currency = 'SYP',
   });
 }
 
@@ -32,6 +36,7 @@ const kPaymentMethods = ['نقدي', 'بطاقة', 'تحويل'];
   required List<String> selectedTreatments,
   required String priceText,
   required bool isEstimated,
+  String currency = 'SYP',
 }) {
   if (patientId == null || patientId.trim().isEmpty) {
     return (values: null, error: 'يجب اختيار أو إدخال اسم المريض');
@@ -55,6 +60,7 @@ const kPaymentMethods = ['نقدي', 'بطاقة', 'تحويل'];
       typeOfTreatment: selectedTreatments.join(' , '),
       total: total,
       status: isEstimated ? 'estimated' : 'pending',
+      currency: currency,
     ),
     error: null,
   );
@@ -65,6 +71,7 @@ const kPaymentMethods = ['نقدي', 'بطاقة', 'تحويل'];
   required double remainingBalance,
   required String method,
   required String note,
+  String currency = 'SYP',
 }) {
   if (remainingBalance <= 0) {
     return (values: null, error: 'الفاتورة مدفوعة بالكامل');
@@ -95,6 +102,7 @@ const kPaymentMethods = ['نقدي', 'بطاقة', 'تحويل'];
       amount: amount,
       method: trimmedMethod,
       note: note.trim(),
+      currency: currency,
     ),
     error: null,
   );

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/colors.dart';
+import '../../../core/currency_utils.dart';
+import '../../settings_manage/controllers/app_currency_controller.dart';
 import '../../../services/app_notification_service.dart';
 import '../../../services/database_service.dart';
 import '../../home/controllers/dash_board_controller.dart';
@@ -33,6 +35,7 @@ class PaymentDialogController extends GetxController {
   final payMethod = kPaymentMethods.first.obs;
   final loading = true.obs;
   final saving = false.obs;
+  final selectedCurrency = 'SYP'.obs;
 
   @override
   void onInit() {
@@ -40,6 +43,16 @@ class PaymentDialogController extends GetxController {
     amountController = TextEditingController();
     noteController = TextEditingController();
     totalAmount.value = invoice.total;
+    final invoiceCode = invoice.currency;
+    if (kInputCurrencyCodes.contains(invoiceCode)) {
+      selectedCurrency.value = invoiceCode;
+    } else {
+      final code = Get.isRegistered<AppCurrencyController>()
+          ? Get.find<AppCurrencyController>().code.value
+          : 'SYP';
+      selectedCurrency.value =
+          kInputCurrencyCodes.contains(code) ? code : 'SYP';
+    }
     loadData();
   }
 
@@ -70,6 +83,7 @@ class PaymentDialogController extends GetxController {
       remainingBalance: remainingBalance.value,
       method: payMethod.value,
       note: noteController.text,
+      currency: selectedCurrency.value,
     );
 
     if (result.values == null) {

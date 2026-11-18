@@ -14,6 +14,9 @@ class _SummaryItem {
     required this.daily,
     required this.monthly,
     required this.allTime,
+    required this.dailyText,
+    required this.monthlyText,
+    required this.allTimeText,
     required this.icon,
     required this.color,
     this.highlightNegative = false,
@@ -23,6 +26,9 @@ class _SummaryItem {
   final double daily;
   final double monthly;
   final double allTime;
+  final String dailyText;
+  final String monthlyText;
+  final String allTimeText;
   final IconData icon;
   final Color color;
   final bool highlightNegative;
@@ -49,6 +55,11 @@ class DailySummaryGrid extends StatelessWidget {
           daily: report.daily.invoicesTotal,
           monthly: monthSummary.invoicesTotal,
           allTime: report.allTime.invoicesTotal,
+          dailyText: controller.moneyLabelInvoices(InventoryMoneyScope.today),
+          monthlyText: controller.moneyLabelInvoices(InventoryMoneyScope.month),
+          allTimeText: controller.moneyLabelInvoices(
+            InventoryMoneyScope.allTime,
+          ),
           icon: Icons.receipt_long,
           color: Colors.blue,
         ),
@@ -57,6 +68,11 @@ class DailySummaryGrid extends StatelessWidget {
           daily: report.daily.paymentsReceived,
           monthly: monthSummary.paymentsReceived,
           allTime: report.allTime.paymentsReceived,
+          dailyText: controller.moneyLabelPayments(InventoryMoneyScope.today),
+          monthlyText: controller.moneyLabelPayments(InventoryMoneyScope.month),
+          allTimeText: controller.moneyLabelPayments(
+            InventoryMoneyScope.allTime,
+          ),
           icon: Icons.payments,
           color: Colors.green,
         ),
@@ -65,6 +81,15 @@ class DailySummaryGrid extends StatelessWidget {
           daily: report.daily.outstanding,
           monthly: monthSummary.outstanding,
           allTime: report.allTime.outstanding,
+          dailyText: controller.moneyLabelOutstanding(
+            InventoryMoneyScope.today,
+          ),
+          monthlyText: controller.moneyLabelOutstanding(
+            InventoryMoneyScope.month,
+          ),
+          allTimeText: controller.moneyLabelOutstanding(
+            InventoryMoneyScope.allTime,
+          ),
           icon: Icons.pending_actions,
           color: Colors.orange,
         ),
@@ -73,6 +98,11 @@ class DailySummaryGrid extends StatelessWidget {
           daily: report.daily.expenses,
           monthly: monthSummary.expenses,
           allTime: report.allTime.expenses,
+          dailyText: controller.moneyLabelExpenses(InventoryMoneyScope.today),
+          monthlyText: controller.moneyLabelExpenses(InventoryMoneyScope.month),
+          allTimeText: controller.moneyLabelExpenses(
+            InventoryMoneyScope.allTime,
+          ),
           icon: Icons.shopping_cart_outlined,
           color: Colors.red,
         ),
@@ -81,6 +111,11 @@ class DailySummaryGrid extends StatelessWidget {
           daily: report.daily.netCashFlow,
           monthly: monthSummary.netCashFlow,
           allTime: report.allTime.netCashFlow,
+          dailyText: controller.moneyLabelNetCash(InventoryMoneyScope.today),
+          monthlyText: controller.moneyLabelNetCash(InventoryMoneyScope.month),
+          allTimeText: controller.moneyLabelNetCash(
+            InventoryMoneyScope.allTime,
+          ),
           icon: Icons.account_balance_wallet,
           color: Colors.purple,
           highlightNegative: true,
@@ -125,7 +160,7 @@ class DailySummaryGrid extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           SizedBox(
-            height: 100,
+            height: 150,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
@@ -138,6 +173,9 @@ class DailySummaryGrid extends StatelessWidget {
                   monthlyAmount: item.monthly,
                   monthlyLabel: monthLabel,
                   allTimeAmount: item.allTime,
+                  dailyAmountText: item.dailyText,
+                  monthlyAmountText: item.monthlyText,
+                  allTimeAmountText: item.allTimeText,
                   icon: item.icon,
                   color: item.color,
                   highlightNegative: item.highlightNegative,
@@ -147,10 +185,7 @@ class DailySummaryGrid extends StatelessWidget {
           ),
           if (showDetails) ...[
             const SizedBox(height: 8),
-            _ExpenseBreakdown(
-              controller: controller,
-              monthLabel: monthLabel,
-            ),
+            _ExpenseBreakdown(controller: controller, monthLabel: monthLabel),
             const SizedBox(height: 8),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -173,6 +208,9 @@ class DailySummaryGrid extends StatelessWidget {
                       monthlyAmount: item.monthly,
                       monthlyLabel: monthLabel,
                       allTimeAmount: item.allTime,
+                      dailyAmountText: item.dailyText,
+                      monthlyAmountText: item.monthlyText,
+                      allTimeAmountText: item.allTimeText,
                       icon: item.icon,
                       color: item.color,
                       highlightNegative: item.highlightNegative,
@@ -190,10 +228,7 @@ class DailySummaryGrid extends StatelessWidget {
 }
 
 class _ExpenseBreakdown extends StatelessWidget {
-  const _ExpenseBreakdown({
-    required this.controller,
-    required this.monthLabel,
-  });
+  const _ExpenseBreakdown({required this.controller, required this.monthLabel});
 
   final DailyInventoryController controller;
   final String monthLabel;
@@ -201,19 +236,27 @@ class _ExpenseBreakdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final inventoryOutputs = controller.displayedMonthInventoryOutputExpenses;
-      final byCategory = controller.displayedMonthExpenseBreakdown;
-      if (inventoryOutputs <= 0 && byCategory.isEmpty) {
+      final outputsByCur = controller.displayedMonthInventoryOutputByCurrency;
+      final byCategoryCur = controller.displayedMonthExpenseBreakdownCurrency;
+      if (outputsByCur.isEmpty && byCategoryCur.isEmpty) {
         return const SizedBox.shrink();
       }
 
-      final rows = <String, double>{
-        'مخرجات المخزون': inventoryOutputs,
-        ...{
-          for (final cat in ClinicExpenseCategory.all)
-            if ((byCategory[cat.id] ?? 0) > 0) cat.label: byCategory[cat.id]!,
-        },
-      };
+      final chips = <Widget>[];
+
+      if (outputsByCur.isNotEmpty) {
+        chips.add(
+          _breakdownChip(title: 'مخرجات المخزون', totals: outputsByCur),
+        );
+      }
+
+      for (final cat in ClinicExpenseCategory.all) {
+        final totals = byCategoryCur[cat.id];
+        if (totals == null || totals.values.every((v) => v == 0)) continue;
+        chips.add(_breakdownChip(title: cat.label, totals: totals));
+      }
+
+      if (chips.isEmpty) return const SizedBox.shrink();
 
       return Container(
         width: double.infinity,
@@ -221,7 +264,7 @@ class _ExpenseBreakdown extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red.withOpacity(0.12)),
+          border: Border.all(color: Colors.red.withValues(alpha: 0.12)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -235,30 +278,49 @@ class _ExpenseBreakdown extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: rows.entries.map((entry) {
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${entry.key}: ${formatMoney(entry.value)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
+            Wrap(spacing: 8, runSpacing: 8, children: chips),
           ],
         ),
       );
     });
+  }
+
+  Widget _breakdownChip({
+    required String title,
+    required Map<String, double> totals,
+  }) {
+    final parts = currencyAmountParts(totals);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6,
+        children: [
+          Text(
+            '$title:',
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          ...parts.map(
+            (p) => Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                p,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

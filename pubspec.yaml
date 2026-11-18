@@ -51,6 +51,7 @@ dependencies:
   # requires Visual Studio ATL (atlbase.h) for Windows release builds.
   flutter_local_notifications: ^17.2.4
   get_storage: ^2.1.1
+  http: ^1.2.2
   alphabet_list_view:
   record: ^5.2.0
 

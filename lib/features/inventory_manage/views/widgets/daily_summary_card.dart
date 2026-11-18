@@ -13,6 +13,9 @@ class DailySummaryCard extends StatelessWidget {
     required this.icon,
     required this.color,
     this.monthlyLabel = 'شهري',
+    this.dailyAmountText,
+    this.monthlyAmountText,
+    this.allTimeAmountText,
     this.highlightNegative = false,
     this.compact = true,
   });
@@ -21,6 +24,9 @@ class DailySummaryCard extends StatelessWidget {
   final double dailyAmount;
   final double monthlyAmount;
   final double allTimeAmount;
+  final String? dailyAmountText;
+  final String? monthlyAmountText;
+  final String? allTimeAmountText;
   final String monthlyLabel;
   final IconData icon;
   final Color color;
@@ -67,22 +73,27 @@ class DailySummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            formatMoneyCompact(monthlyAmount),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: primaryColor,
-            ),
+          _amountText(
+            monthlyAmountText ?? formatMoneyCompact(monthlyAmount),
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: primaryColor,
           ),
           const SizedBox(height: 2),
-          Text(
-            'اليوم ${formatMoneyCompact(dailyAmount)}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
+          Row(
+            children: [
+              Text(
+                'اليوم ',
+                style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
+              ),
+              Expanded(
+                child: _amountText(
+                  dailyAmountText ?? formatMoneyCompact(dailyAmount),
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -116,17 +127,26 @@ class DailySummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          _metricRow('يومي', dailyAmount),
+          _metricRow(
+            'يومي',
+            dailyAmountText ?? formatMoney(dailyAmount),
+          ),
           const SizedBox(height: 4),
-          _metricRow(monthlyLabel, monthlyAmount),
+          _metricRow(
+            monthlyLabel,
+            monthlyAmountText ?? formatMoney(monthlyAmount),
+          ),
           const SizedBox(height: 4),
-          _metricRow('الكل', allTimeAmount),
+          _metricRow(
+            'الكل',
+            allTimeAmountText ?? formatMoney(allTimeAmount),
+          ),
         ],
       ),
     );
   }
 
-  Widget _metricRow(String label, double amount) {
+  Widget _metricRow(String label, String amountText) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -135,17 +155,44 @@ class DailySummaryCard extends StatelessWidget {
           style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey[600]),
         ),
         Flexible(
-          child: Text(
-            formatMoney(amount),
-            textAlign: TextAlign.end,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: _valueColor(amount),
-            ),
+          child: _amountText(
+            amountText,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: _valueColor(_parseLeadingAmount(amountText)),
+            alignEnd: true,
           ),
         ),
       ],
+    );
+  }
+
+  double _parseLeadingAmount(String text) {
+    final match = RegExp(r'[\d,]+\.?\d*').firstMatch(text);
+    if (match == null) return 0;
+    return double.tryParse(match.group(0)!.replaceAll(',', '')) ?? 0;
+  }
+
+  Widget _amountText(
+    String text, {
+    double fontSize = 11,
+    FontWeight fontWeight = FontWeight.w500,
+    Color? color,
+    bool alignEnd = false,
+  }) {
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+        style: GoogleFonts.poppins(
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          color: color,
+        ),
+      ),
     );
   }
 

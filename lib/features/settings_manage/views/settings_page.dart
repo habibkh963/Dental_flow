@@ -6,7 +6,11 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 import '../../../core/colors.dart';
+import '../../auth/widgets/app_startup_gate.dart';
+import '../../../services/doctor_activation_service.dart';
+import '../controllers/app_currency_controller.dart';
 import 'treatment_catalog_dialog.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class SettingsPage extends StatelessWidget {
   final SettingsController ctrl = Get.put(
@@ -20,52 +24,69 @@ class SettingsPage extends StatelessWidget {
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'الإعدادات',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 24),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'الإعدادات',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 24),
 
-            _tile(
-              icon: Icons.medical_services_outlined,
-              title: 'خطط العلاج والأسعار',
-              subtitle:
-                  'إدخال يدوي لأسماء الخطط وأسعارها (للفواتير وملف المريض)',
-              onTap: () => openTreatmentCatalogDialog(),
-            ),
+              _tile(
+                icon: Icons.payments_outlined,
+                title: 'العملة الافتراضية',
+                subtitle: 'تظهر في الفواتير والجرد وجميع الأسعار',
+                onTap: () => _showCurrencyDialog(context),
+              ),
 
-            _tile(
-              icon: Icons.lock_outline,
-              title: 'كلمة مرور للتطبيق',
-              subtitle: 'تفعيل / تغيير كلمة المرور',
-              onTap: () => _showPasswordDialog(context, ctrl),
-            ),
+              _tile(
+                icon: Icons.medical_services_outlined,
+                title: 'خطط العلاج والأسعار',
+                subtitle:
+                    'إدخال يدوي لأسماء الخطط وأسعارها (للفواتير وملف المريض)',
+                onTap: () => openTreatmentCatalogDialog(),
+              ),
 
-            _tile(
-              icon: Icons.upload_file,
-              title: 'تصدير البيانات',
-              subtitle: 'حفظ نسخة احتياطية من قاعدة البيانات',
-              onTap: () async => await ctrl.exportDatabase(),
-            ),
+              _tile(
+                icon: Icons.verified_user_outlined,
+                title: 'تفعيل الطبيب (الرخصة)',
+                subtitle:
+                    'إعادة التفعيل يطلب الخادم مرة أخرى؛ التشغيل العادي يعتمد على البيانات المحفوظة',
+                onTap: () => _confirmResetDoctorActivation(context),
+              ),
 
-            _tile(
-              icon: Icons.download,
-              title: 'استيراد البيانات',
-              subtitle: 'تحميل ملف خارجي واسترجاع البيانات',
-              onTap: () async => await ctrl.importDatabase(),
-            ),
+              _tile(
+                icon: Icons.lock_outline,
+                title: 'كلمة مرور للتطبيق',
+                subtitle: 'قفل الشاشة بكلمة مرور اختيارية',
+                onTap: () => _showPasswordDialog(context, ctrl),
+              ),
 
-            _tile(
-              icon: Icons.delete_forever_outlined,
-              title: 'مسح جميع البيانات',
-              subtitle: 'حذف كل بيانات التطبيق نهائياً',
-              color: AppColors.cancelledColor,
-              onTap: () => _confirmDelete(context),
-            ),
-          ],
+              _tile(
+                icon: Icons.upload_file,
+                title: 'تصدير البيانات',
+                subtitle: 'حفظ نسخة احتياطية من قاعدة البيانات',
+                onTap: () async => await ctrl.exportDatabase(),
+              ),
+
+              _tile(
+                icon: Icons.download,
+                title: 'استيراد البيانات',
+                subtitle: 'تحميل ملف خارجي واسترجاع البيانات',
+                onTap: () async => await ctrl.importDatabase(),
+              ),
+
+              _tile(
+                icon: Icons.delete_forever_outlined,
+                title: 'مسح جميع البيانات',
+                subtitle: 'حذف كل بيانات التطبيق نهائياً',
+                color: AppColors.cancelledColor,
+                onTap: () => _confirmDelete(context),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -170,6 +191,35 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showCurrencyDialog(BuildContext context) {
+  if (!Get.isRegistered<AppCurrencyController>()) {
+    Get.put(AppCurrencyController(), permanent: true);
+  }
+  final currency = Get.find<AppCurrencyController>();
+
+  Get.dialog(
+    AlertDialog(
+      title: const Text('اختيار العملة'),
+      content: Obx(
+        () => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: kAppCurrencyOptions.map((opt) {
+            return RadioListTile<String>(
+              value: opt.code,
+              groupValue: currency.code.value,
+              title: Text('${opt.label} (${opt.suffix})'),
+              onChanged: (value) {
+                if (value != null) currency.setCurrency(value);
+              },
+            );
+          }).toList(),
+        ),
+      ),
+      actions: [TextButton(onPressed: Get.back, child: const Text('إغلاق'))],
+    ),
+  );
 }
 
 void _showPasswordDialog(
@@ -308,6 +358,37 @@ void _showPasswordDialog(
     ),
     barrierColor: Colors.black.withOpacity(0.3),
   );
+}
+
+Future<void> _confirmResetDoctorActivation(BuildContext context) async {
+  final proceed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(
+        'إعادة تفعيل الطبيب',
+        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+      ),
+      content: Text(
+        'سيتم طلب الاسم والرمز من جديد والتحقق مع الخادم عند فتح التطبيق.',
+        style: GoogleFonts.poppins(fontSize: 13),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('متابعة'),
+        ),
+      ],
+    ),
+  );
+
+  if (proceed != true) return;
+
+  await DoctorActivationService.instance.clearActivation();
+  Get.offAll(() => const AppStartupGate());
 }
 
 class SettingsController extends GetxController {

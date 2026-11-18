@@ -25,6 +25,7 @@ class DatabaseService {
   final List<Map<String, dynamic>> _conditionProgress = [];
   final List<Map<String, dynamic>> _inventoryOutputs = [];
   final List<Map<String, dynamic>> _clinicExpenses = [];
+  final List<Map<String, dynamic>> _dailyLedgerEntries = [];
 
   // Patients CRUD
   Future<List<Map<String, dynamic>>> getPatients() async {
@@ -499,6 +500,7 @@ class DatabaseService {
       'quantity': data['quantity'] ?? 0.0,
       'unit': data['unit'] ?? 'وحدة',
       'price': data['price'] ?? 0.0,
+      'currency': data['currency'] ?? 'SYP',
       'date': data['date'] ?? now,
       'created_at': data['created_at'] ?? now,
     };
@@ -534,6 +536,7 @@ class DatabaseService {
       'category': data['category'] ?? 'other',
       'description': data['description'] ?? '',
       'amount': data['amount'] ?? 0.0,
+      'currency': data['currency'] ?? 'SYP',
       'expense_date': data['expense_date'] ?? now,
       'note': data['note'] ?? '',
       'created_at': data['created_at'] ?? now,
@@ -552,5 +555,85 @@ class DatabaseService {
       _payments
         ..sort((a, b) => ('${b['paid_at']}').compareTo('${a['paid_at']}')),
     );
+  }
+
+  Future<String> addDailyLedgerEntry(Map<String, dynamic> data) async {
+    final id = data['id'] ?? _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    _dailyLedgerEntries.add({
+      'id': id,
+      'entry_type': data['entry_type'] ?? 'income',
+      'amount': data['amount'] ?? 0,
+      'note': data['note'] ?? '',
+      'attachment_path': data['attachment_path'] ?? '',
+      'entry_date': data['entry_date'] ?? now,
+      'created_at': data['created_at'] ?? now,
+    });
+    return id;
+  }
+
+  Future<Map<String, List<Map<String, dynamic>>>> getFinancialMovementsForDate(
+    DateTime day,
+  ) async {
+    final dayStr = DateFormat('yyyy-MM-dd').format(day);
+
+    bool sameDay(String? raw) =>
+        raw != null && raw.length >= 10 && raw.substring(0, 10) == dayStr;
+
+    final incomes = <Map<String, dynamic>>[];
+    for (final p in _payments) {
+      if (!sameDay(p['paid_at']?.toString())) continue;
+      incomes.add({
+        'kind': 'payment',
+        'title': 'دفعة فاتورة',
+        'amount': (p['amount'] as num?)?.toDouble() ?? 0,
+        'note': p['note']?.toString() ?? '',
+        'subtitle': p['method']?.toString() ?? '',
+      });
+    }
+    for (final q in _dailyLedgerEntries) {
+      if (q['entry_type'] != 'income' || !sameDay(q['entry_date']?.toString())) {
+        continue;
+      }
+      incomes.add({
+        'kind': 'quick',
+        'title': 'إيراد يدوي',
+        'amount': (q['amount'] as num?)?.toDouble() ?? 0,
+        'note': q['note']?.toString() ?? '',
+      });
+    }
+
+    final outgoings = <Map<String, dynamic>>[];
+    for (final e in _clinicExpenses) {
+      if (!sameDay(e['expense_date']?.toString())) continue;
+      outgoings.add({
+        'kind': 'clinic_expense',
+        'title': e['description']?.toString() ?? 'نفقة',
+        'amount': (e['amount'] as num?)?.toDouble() ?? 0,
+        'note': e['note']?.toString() ?? '',
+      });
+    }
+    for (final o in _inventoryOutputs) {
+      if (!sameDay(o['date']?.toString())) continue;
+      outgoings.add({
+        'kind': 'inventory_output',
+        'title': o['item_name']?.toString() ?? 'مخرج',
+        'amount': (o['price'] as num?)?.toDouble() ?? 0,
+        'note': '',
+      });
+    }
+    for (final q in _dailyLedgerEntries) {
+      if (q['entry_type'] != 'expense' || !sameDay(q['entry_date']?.toString())) {
+        continue;
+      }
+      outgoings.add({
+        'kind': 'quick',
+        'title': 'مصروف يدوي',
+        'amount': (q['amount'] as num?)?.toDouble() ?? 0,
+        'note': q['note']?.toString() ?? '',
+      });
+    }
+
+    return {'incomes': incomes, 'outgoings': outgoings};
   }
 }

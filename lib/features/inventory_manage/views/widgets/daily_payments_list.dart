@@ -34,6 +34,7 @@ class DailyPaymentsList extends StatelessWidget {
           final payment = payments[index];
           final date = payment['date'] as DateTime;
           final amount = payment['amount'] as double;
+          final currencyCode = recordCurrencyCode(payment);
           final method = payment['payment_method'] ?? 'نقدي';
           final notes = (payment['notes'] as String?)?.trim() ?? '';
 
@@ -91,7 +92,7 @@ class DailyPaymentsList extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  formatMoney(amount),
+                  formatMoney(amount, currencyCode: currencyCode),
                   style: GoogleFonts.poppins(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,

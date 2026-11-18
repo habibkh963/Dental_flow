@@ -24,6 +24,11 @@ class DashBoardController extends GetxController {
   RxDouble monthlyNetProfit = 0.0.obs;
   RxDouble monthlyPaid = 0.0.obs;
 
+  final selectedLedgerDay = Rx<DateTime>(DateTime.now());
+  final ledgerIncomes = <Map<String, dynamic>>[].obs;
+  final ledgerOutgoings = <Map<String, dynamic>>[].obs;
+  final ledgerLoading = false.obs;
+
   late Timer _refreshTimer;
 
   @override
@@ -58,7 +63,10 @@ class DashBoardController extends GetxController {
       final todayAppts = await db.getTodayAppointments();
       final lowItems = await db.getLowStockItems(threshold: 3);
 
-      todayAppointments.value = todayAppts;
+      todayAppointments.value = todayAppts.where((a) {
+        final status = (a['status'] as String? ?? '').toLowerCase();
+        return status != 'done' && status != 'completed';
+      }).toList();
       lowStockItems.value = lowItems;
 
       hasUrgentAppointments.value =
@@ -74,6 +82,8 @@ class DashBoardController extends GetxController {
         todayAppointments: todayAppts,
         lowStockItems: lowItems,
       );
+
+      await loadDayLedger(selectedLedgerDay.value);
     } catch (e) {
       debugPrint('Error loading stats: $e');
     } finally {
@@ -174,4 +184,34 @@ class DashBoardController extends GetxController {
     } catch (_) {}
     return null;
   }
+
+  Future<void> setLedgerDay(DateTime day) async {
+    selectedLedgerDay.value = DateTime(day.year, day.month, day.day);
+    await loadDayLedger(selectedLedgerDay.value);
+  }
+
+  Future<void> loadDayLedger(DateTime day) async {
+    try {
+      ledgerLoading.value = true;
+      final bundle = await db.getFinancialMovementsForDate(day);
+      ledgerIncomes.assignAll(bundle['incomes'] ?? const []);
+      ledgerOutgoings.assignAll(bundle['outgoings'] ?? const []);
+    } catch (e) {
+      debugPrint('Error loading day ledger: $e');
+      ledgerIncomes.clear();
+      ledgerOutgoings.clear();
+    } finally {
+      ledgerLoading.value = false;
+    }
+  }
+
+  double get ledgerIncomeTotal => ledgerIncomes.fold(
+        0.0,
+        (sum, e) => sum + ((e['amount'] as num?)?.toDouble() ?? 0),
+      );
+
+  double get ledgerOutgoingTotal => ledgerOutgoings.fold(
+        0.0,
+        (sum, e) => sum + ((e['amount'] as num?)?.toDouble() ?? 0),
+      );
 }

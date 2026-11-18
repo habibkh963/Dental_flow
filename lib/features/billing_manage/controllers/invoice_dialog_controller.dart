@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/colors.dart';
+import '../../../core/currency_utils.dart';
 import '../../../services/database_service.dart';
+import '../../settings_manage/controllers/app_currency_controller.dart';
 import '../../settings_manage/controllers/treatment_catalog_controller.dart';
 import '../utils/billing_input.dart';
 import 'invoices_controller.dart';
@@ -26,6 +28,7 @@ class InvoiceDialogController extends GetxController {
   final selectedTreatments = <String>[].obs;
   final inputMode = false.obs;
   final isEstimated = false.obs;
+  final selectedCurrency = 'SYP'.obs;
   final saving = false.obs;
 
   bool get hasPresetPatient => patient != null;
@@ -35,6 +38,11 @@ class InvoiceDialogController extends GetxController {
     super.onInit();
     patientNameController = TextEditingController();
     priceController = TextEditingController();
+    final code = Get.isRegistered<AppCurrencyController>()
+        ? Get.find<AppCurrencyController>().code.value
+        : 'SYP';
+    selectedCurrency.value =
+        kInputCurrencyCodes.contains(code) ? code : 'SYP';
     _loadPatients();
   }
 
@@ -149,6 +157,7 @@ class InvoiceDialogController extends GetxController {
       selectedTreatments: selectedTreatments.toList(),
       priceText: priceController.text,
       isEstimated: isEstimated.value,
+      currency: selectedCurrency.value,
     );
 
     if (result.values == null) {

@@ -5,9 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/colors.dart';
 import '../../../settings_manage/controllers/treatment_catalog_controller.dart';
+import '../../../shared/widgets/amount_with_currency_field.dart';
+import '../../../shared/widgets/app_dialog_shell.dart';
 import '../../controllers/invoice_dialog_controller.dart';
 import '../../controllers/invoices_controller.dart';
 import 'billing_form_field.dart';
+import '../../../inventory_manage/utils/money_format.dart';
 
 void openInvoiceDialog({Map<String, dynamic>? patient}) {
   const flowTag = 'standalone_invoice_flow';
@@ -35,24 +38,20 @@ class InvoiceDialog extends GetView<InvoiceDialogController> {
         ? ''
         : '${patient!['first_name'] ?? ''} ${patient!['last_name'] ?? ''}'.trim();
 
+    final title =
+        patient == null ? 'فاتورة جديدة' : 'فاتورة – $patientName';
+
     return Dialog(
-      insetPadding: const EdgeInsets.all(20),
-      child: Container(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: AppDialogFrame(
+        title: title,
         width: 560,
-        padding: const EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                patient == null ? 'فاتورة جديدة' : 'فاتورة – $patientName',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.mainColor,
-                ),
-              ),
+        maxHeight: 760,
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
               if (!controller.hasPresetPatient) ...[
                 const SizedBox(height: 20),
                 Text(
@@ -223,7 +222,7 @@ class InvoiceDialog extends GetView<InvoiceDialogController> {
                             const SizedBox(height: 4),
                             Text(
                               price > 0
-                                  ? '${price.toStringAsFixed(0)} ل.س'
+                                  ? formatMoney(price)
                                   : 'سعر غير محدد',
                               style: GoogleFonts.poppins(
                                 color: isSelected
@@ -240,15 +239,15 @@ class InvoiceDialog extends GetView<InvoiceDialogController> {
                 );
               }),
               const SizedBox(height: 20),
-              TextField(
-                controller: controller.priceController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+              Obx(
+                () => AmountWithCurrencyField(
+                  amountController: controller.priceController,
+                  selectedCurrencyCode: controller.selectedCurrency.value,
+                  onCurrencyChanged: (c) =>
+                      controller.selectedCurrency.value = c,
+                  label: 'السعر الإجمالي',
+                  style: AmountFieldStyle.billing,
                 ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                ],
-                decoration: billingFieldDecoration('السعر الإجمالي (ل.س)'),
               ),
               const SizedBox(height: 12),
               Obx(
@@ -264,45 +263,38 @@ class InvoiceDialog extends GetView<InvoiceDialogController> {
                   controlAffinity: ListTileControlAffinity.leading,
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Obx(
-                    () => TextButton(
-                      onPressed:
-                          controller.saving.value ? null : () => Get.back(),
-                      child: Text('الغاء', style: GoogleFonts.poppins()),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Obx(
-                    () => FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.mainColor,
-                        padding: const EdgeInsets.symmetric(horizontal: 26),
-                      ),
-                      onPressed: controller.saving.value ? null : controller.save,
-                      child: controller.saving.value
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              'احفظ الفاتورة',
-                              style: GoogleFonts.poppins(color: Colors.white),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
             ],
-          ),
         ),
+        actions: [
+          Obx(
+            () => TextButton(
+              onPressed: controller.saving.value ? null : () => Get.back(),
+              child: Text('إلغاء', style: GoogleFonts.poppins()),
+            ),
+          ),
+          Obx(
+            () => FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mainColor,
+                padding: const EdgeInsets.symmetric(horizontal: 26),
+              ),
+              onPressed: controller.saving.value ? null : controller.save,
+              child: controller.saving.value
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      'احفظ الفاتورة',
+                      style: GoogleFonts.poppins(color: Colors.white),
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }

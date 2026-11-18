@@ -5,9 +5,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/colors.dart';
+import '../../../shared/widgets/amount_with_currency_field.dart';
 import '../../controller/clinic_expense_dialog_controller.dart';
 import '../../utils/clinic_expense_categories.dart';
 import 'inventory_form_field.dart';
+import 'styled_inventory_dialog.dart';
 
 class ClinicExpenseDialog extends StatelessWidget {
   const ClinicExpenseDialog({super.key, required this.dialogController});
@@ -18,19 +20,11 @@ class ClinicExpenseDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = dialogController;
 
-    return AlertDialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text(
-        'إضافة نفقة تشغيل',
-        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-      ),
-      content: SizedBox(
-        width: 420,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+    return styledInventoryDialog(
+      title: 'إضافة نفقة تشغيل',
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
               Obx(
                 () => DropdownButtonFormField<String>(
                   initialValue: c.selectedCategory.value,
@@ -56,15 +50,14 @@ class ClinicExpenseDialog extends StatelessWidget {
                 onChanged: (_) => c.clearFormError(),
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: c.amountController,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                ],
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: inventoryFieldDecoration('المبلغ (ل.س)'),
-                onChanged: (_) => c.clearFormError(),
+              Obx(
+                () => AmountWithCurrencyField(
+                  amountController: c.amountController,
+                  selectedCurrencyCode: c.selectedCurrency.value,
+                  onCurrencyChanged: (code) => c.selectedCurrency.value = code,
+                  label: 'المبلغ',
+                  onAmountChanged: (_) => c.clearFormError(),
+                ),
               ),
               const SizedBox(height: 12),
               GetBuilder<ClinicExpenseDialogController>(
@@ -111,38 +104,31 @@ class ClinicExpenseDialog extends StatelessWidget {
                   ),
                 );
               }),
-            ],
-          ),
-        ),
+        ],
       ),
       actions: [
         Obx(() {
           final saving = c.saving.value;
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: saving ? null : () => Navigator.of(context).pop(),
-                child: Text('إلغاء', style: GoogleFonts.poppins()),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: saving ? null : () => c.submit(context),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.mainColor,
-                ),
-                child: saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text('إضافة', style: GoogleFonts.poppins()),
-              ),
-            ],
+          return TextButton(
+            onPressed: saving ? null : () => Navigator.of(context).pop(),
+            child: Text('إلغاء', style: GoogleFonts.poppins()),
+          );
+        }),
+        Obx(() {
+          final saving = c.saving.value;
+          return FilledButton(
+            onPressed: saving ? null : () => c.submit(context),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.mainColor),
+            child: saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text('إضافة', style: GoogleFonts.poppins()),
           );
         }),
       ],

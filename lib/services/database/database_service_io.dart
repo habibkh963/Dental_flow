@@ -223,6 +223,19 @@ class DatabaseService {
       );
     ''');
 
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS daily_ledger_entries (
+        id TEXT PRIMARY KEY,
+        entry_type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        currency TEXT DEFAULT 'SYP',
+        note TEXT,
+        attachment_path TEXT,
+        entry_date TEXT NOT NULL,
+        created_at TEXT
+      );
+    ''');
+
     // Migration: ensure appointments table has 'materials_used' column (for older DBs)
     try {
       final cols = await db.rawQuery("PRAGMA table_info('appointments');");
@@ -273,6 +286,23 @@ class DatabaseService {
         );
       }
     } catch (_) {}
+
+    for (final table in const [
+      'daily_ledger_entries',
+      'clinic_expenses',
+      'inventory_outputs',
+      'payments',
+      'invoices',
+    ]) {
+      try {
+        final cols = await db.rawQuery("PRAGMA table_info('$table');");
+        if (cols.isNotEmpty && !cols.any((c) => c['name'] == 'currency')) {
+          await db.execute(
+            "ALTER TABLE $table ADD COLUMN currency TEXT DEFAULT 'SYP';",
+          );
+        }
+      } catch (_) {}
+    }
 
     // Migration: ensure invoice_lines table has 'material_id' column (for older DBs)
     try {
@@ -544,6 +574,7 @@ class DatabaseService {
       'total': invoice['total'] ?? 0.0,
       'status': invoice['status'] ?? 'pending',
       'type_of_treatment': invoice['type_of_treatment'] ?? '',
+      'currency': invoice['currency'] ?? 'SYP',
       'issued_at': invoice['issued_at'] ?? now,
     };
 
@@ -774,6 +805,7 @@ class DatabaseService {
       'amount': payment['amount'] ?? 0.0,
       'method': payment['method'] ?? 'نقدي',
       'note': payment['note'] ?? '',
+      'currency': payment['currency'] ?? 'SYP',
       'paid_at': payment['paid_at'] ?? now,
     };
     await db.insert('payments', data);
@@ -1100,6 +1132,7 @@ class DatabaseService {
       'quantity': data['quantity'] ?? 0.0,
       'unit': data['unit'] ?? 'وحدة',
       'price': data['price'] ?? 0.0,
+      'currency': data['currency'] ?? 'SYP',
       'date': data['date'] ?? now,
       'created_at': data['created_at'] ?? now,
     };
@@ -1132,6 +1165,7 @@ class DatabaseService {
       'category': data['category'] ?? 'other',
       'description': data['description'] ?? '',
       'amount': data['amount'] ?? 0.0,
+      'currency': data['currency'] ?? 'SYP',
       'expense_date': data['expense_date'] ?? now,
       'note': data['note'] ?? '',
       'created_at': data['created_at'] ?? now,
@@ -1146,5 +1180,128 @@ class DatabaseService {
   // Simplified getAllPayments if not already present
   Future<List<Map<String, dynamic>>> getAllPaymentsForReport() async {
     return await db.query('payments', orderBy: 'paid_at DESC');
+  }
+
+  Future<String> addDailyLedgerEntry(Map<String, dynamic> data) async {
+    final id = _uuid.v4();
+    final now = DateTime.now().toIso8601String();
+    await db.insert('daily_ledger_entries', {
+      'id': id,
+      'entry_type': data['entry_type'] ?? 'income',
+      'amount': data['amount'] ?? 0,
+      'currency': data['currency'] ?? 'SYP',
+      'note': data['note'] ?? '',
+      'attachment_path': data['attachment_path'] ?? '',
+      'entry_date': data['entry_date'] ?? now,
+      'created_at': data['created_at'] ?? now,
+    });
+    return id;
+  }
+
+  Future<Map<String, List<Map<String, dynamic>>>> getFinancialMovementsForDate(
+    DateTime day,
+  ) async {
+    final dayStr = DateFormat('yyyy-MM-dd').format(day);
+
+    final payments = await db.rawQuery(
+      '''
+      SELECT p.amount AS amount,
+             p.currency AS currency,
+             p.note AS note,
+             p.method AS label,
+             p.paid_at AS at,
+             COALESCE(i.type_of_treatment, 'دفعة فاتورة') AS title
+      FROM payments p
+      LEFT JOIN invoices i ON i.id = p.invoice_id
+      WHERE date(substr(p.paid_at, 1, 10)) = ?
+      ORDER BY p.paid_at DESC
+      ''',
+      [dayStr],
+    );
+
+    final quickIncome = await db.query(
+      'daily_ledger_entries',
+      where: "entry_type = 'income' AND date(substr(entry_date, 1, 10)) = ?",
+      whereArgs: [dayStr],
+      orderBy: 'created_at DESC',
+    );
+
+    final quickExpense = await db.query(
+      'daily_ledger_entries',
+      where: "entry_type = 'expense' AND date(substr(entry_date, 1, 10)) = ?",
+      whereArgs: [dayStr],
+      orderBy: 'created_at DESC',
+    );
+
+    final clinicExpenses = await db.query(
+      'clinic_expenses',
+      where:
+          "date(substr(COALESCE(expense_date, created_at), 1, 10)) = ?",
+      whereArgs: [dayStr],
+      orderBy: 'created_at DESC',
+    );
+
+    final outputs = await db.query(
+      'inventory_outputs',
+      where: "date(substr(COALESCE(date, created_at), 1, 10)) = ?",
+      whereArgs: [dayStr],
+      orderBy: 'created_at DESC',
+    );
+
+    final incomes = <Map<String, dynamic>>[];
+    for (final p in payments) {
+      incomes.add({
+        'kind': 'payment',
+        'title': p['title']?.toString() ?? 'دفعة',
+        'amount': (p['amount'] as num?)?.toDouble() ?? 0,
+        'currency': p['currency']?.toString() ?? 'SYP',
+        'note': p['note']?.toString() ?? '',
+        'subtitle': p['label']?.toString() ?? '',
+      });
+    }
+    for (final q in quickIncome) {
+      incomes.add({
+        'kind': 'quick',
+        'title': 'إيراد يدوي',
+        'amount': (q['amount'] as num?)?.toDouble() ?? 0,
+        'currency': q['currency']?.toString() ?? 'SYP',
+        'note': q['note']?.toString() ?? '',
+        'attachment_path': q['attachment_path']?.toString() ?? '',
+      });
+    }
+
+    final outgoings = <Map<String, dynamic>>[];
+    for (final e in clinicExpenses) {
+      outgoings.add({
+        'kind': 'clinic_expense',
+        'title': e['description']?.toString() ?? 'نفقة عيادة',
+        'amount': (e['amount'] as num?)?.toDouble() ?? 0,
+        'currency': e['currency']?.toString() ?? 'SYP',
+        'note': e['note']?.toString() ?? '',
+        'subtitle': e['category']?.toString() ?? '',
+      });
+    }
+    for (final o in outputs) {
+      outgoings.add({
+        'kind': 'inventory_output',
+        'title': o['item_name']?.toString() ?? 'مخرج مخزون',
+        'amount': (o['price'] as num?)?.toDouble() ?? 0,
+        'currency': o['currency']?.toString() ?? 'SYP',
+        'note': '',
+        'subtitle': '${o['quantity'] ?? ''} ${o['unit'] ?? ''}'.trim(),
+      });
+    }
+    for (final q in quickExpense) {
+      outgoings.add({
+        'kind': 'quick',
+        'title': 'مصروف يدوي',
+        'amount': (q['amount'] as num?)?.toDouble() ?? 0,
+        'currency': q['currency']?.toString() ?? 'SYP',
+        'note': q['note']?.toString() ?? '',
+        'attachment_path': q['attachment_path']?.toString() ?? '',
+      });
+    }
+
+    return {'incomes': incomes, 'outgoings': outgoings};
   }
 }

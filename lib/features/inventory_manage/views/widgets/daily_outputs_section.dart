@@ -80,6 +80,7 @@ class DailyOutputsSection extends StatelessWidget {
               final quantity = (output['quantity'] as num?)?.toDouble() ?? 0;
               final unit = output['unit']?.toString() ?? 'وحدة';
               final price = (output['price'] as num?)?.toDouble() ?? 0;
+              final currencyCode = recordCurrencyCode(output);
               final id = output['id']?.toString() ?? '';
               final date = controller.parseDate(
                 output['date'] ?? output['created_at'],
@@ -145,7 +146,7 @@ class DailyOutputsSection extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          formatMoney(price),
+                          formatMoney(price, currencyCode: currencyCode),
                           style: GoogleFonts.poppins(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,

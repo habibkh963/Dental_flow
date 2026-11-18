@@ -8,6 +8,7 @@ class Invoice {
   final DateTime issuedAt;
   final String typeOfTreatment;
   final double remainingBalance;
+  final String currency;
 
   const Invoice({
     required this.id,
@@ -17,6 +18,7 @@ class Invoice {
     required this.issuedAt,
     required this.typeOfTreatment,
     required this.remainingBalance,
+    this.currency = 'SYP',
   });
 
   InvoiceStatus get displayStatus => resolveInvoiceStatus(
@@ -38,6 +40,9 @@ class Invoice {
       issuedAt: _parseDate(map['issued_at']) ?? DateTime.now(),
       typeOfTreatment: map['type_of_treatment']?.toString() ?? '',
       remainingBalance: remainingBalance,
+      currency: map['currency']?.toString().trim().isNotEmpty == true
+          ? map['currency'].toString()
+          : 'SYP',
     );
   }
 

@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'core/windows_app_window.dart';
 import 'features/auth/controllers/auth_controller.dart';
-import 'features/auth/screens/password_creen.dart';
-import 'features/home/views/widgets/app_shell.dart';
+import 'features/auth/widgets/app_startup_gate.dart';
 import 'features/inventory_manage/controller/daily_inventory_controller.dart';
+import 'features/settings_manage/controllers/app_currency_controller.dart';
 import 'features/settings_manage/controllers/treatment_catalog_controller.dart';
 import 'services/app_notification_service.dart';
 import 'services/database_service.dart';
-
 List<String> arabicIndex = [
   'ا',
   'ب',
@@ -45,11 +46,15 @@ List<String> arabicIndex = [
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await GetStorage.init();
+  await initializeDateFormatting('ar');
   await DatabaseService.instance.init();
   await AppNotificationService.instance.initialize();
   Get.put(DailyInventoryController());
   Get.put(TreatmentCatalogController(), permanent: true);
+  Get.put(AppCurrencyController(), permanent: true);
   runApp(DentalClinic());
+  bootstrapWindowsAppWindow();
 }
 
 class DentalClinic extends StatelessWidget {
@@ -68,8 +73,6 @@ class DentalClinic extends StatelessWidget {
       textTheme: textTheme,
       appBarTheme: const AppBarTheme(centerTitle: true),
     );
-    initializeDateFormatting('ar'); // أو 'en', 'fr' حسب التطبيق
-
     return ScreenUtilInit(
       designSize: const Size(1920, 1080),
       minTextAdapt: true,
@@ -83,7 +86,7 @@ class DentalClinic extends StatelessWidget {
           title: 'Dental Clinic Manager',
           theme: theme,
           debugShowCheckedModeBanner: false,
-          home: authController.hasPassword() ? PasswordScreen() : AppShell(),
+          home: const AppStartupGate(),
         );
       },
     );

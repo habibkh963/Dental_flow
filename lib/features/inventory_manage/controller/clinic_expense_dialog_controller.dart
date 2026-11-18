@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/currency_utils.dart';
+import '../../settings_manage/controllers/app_currency_controller.dart';
 import '../utils/clinic_expense_categories.dart';
 import 'daily_inventory_controller.dart';
 
@@ -18,7 +20,18 @@ class ClinicExpenseDialogController extends GetxController {
   final saving = false.obs;
   final formError = RxnString();
   final selectedCategory = ClinicExpenseCategory.laboratories.id.obs;
+  final selectedCurrency = 'SYP'.obs;
   DateTime expenseDate = DateTime.now();
+
+  @override
+  void onInit() {
+    super.onInit();
+    final code = Get.isRegistered<AppCurrencyController>()
+        ? Get.find<AppCurrencyController>().code.value
+        : 'SYP';
+    selectedCurrency.value =
+        kInputCurrencyCodes.contains(code) ? code : 'SYP';
+  }
 
   void clearFormError() => formError.value = null;
 
@@ -64,6 +77,7 @@ class ClinicExpenseDialogController extends GetxController {
         'category': selectedCategory.value,
         'description': description,
         'amount': amount,
+        'currency': selectedCurrency.value,
         'expense_date': expenseDate.toIso8601String(),
         'note': note,
       });

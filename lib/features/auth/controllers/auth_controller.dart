@@ -4,29 +4,26 @@ import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
 class AuthController extends GetxController {
-  RxString? passwordRx = ''.obs; // أو Load من DB
-  var storage;
+  final _storage = GetStorage();
+  final isReady = false.obs;
+  late final RxString passwordRx;
 
   @override
-  void onInit() async {
-    await GetStorage.init();
-    storage = GetStorage();
-    log('', name: '${storage.read('app_password')}');
-
+  void onInit() {
     super.onInit();
-    await loadPassword();
+    final stored = _storage.read('app_password');
+    passwordRx = (stored?.toString() ?? '').obs;
+    log('Loaded password: ${passwordRx.value.isNotEmpty ? '(set)' : '(empty)'}',
+        name: 'AuthController');
+    isReady.value = true;
   }
 
-  Future<void> loadPassword() async {
-    var password = await storage.read('app_password');
-    log('Loaded password: $password');
-    passwordRx?.value = password;
-  }
+  bool checkPassword(String input) => passwordRx.value == input;
 
-  bool checkPassword(String input) {
-    return passwordRx?.value == input;
-  }
+  bool hasPassword() => passwordRx.value.isNotEmpty;
 
-  bool hasPassword() =>
-      passwordRx?.value != null && passwordRx!.value.isNotEmpty;
+  Future<void> setPassword(String value) async {
+    passwordRx.value = value;
+    await _storage.write('app_password', value);
+  }
 }

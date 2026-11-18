@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../../core/colors.dart';
 import '../../controller/daily_inventory_controller.dart';
@@ -102,9 +102,11 @@ class _CategoryFilterStrip extends StatelessWidget {
     return Obx(() {
       final selected = controller.clinicExpenseCategoryFilter.value;
       final expenses = controller.filteredClinicExpenses;
-      final totalAll = expenses.fold<double>(
-        0,
-        (sum, e) => sum + ((e['amount'] as num?)?.toDouble() ?? 0),
+      final totalParts = currencyAmountParts(
+        sumAmountsByCurrency(expenses, 'amount'),
+      );
+      final hasAnyExpense = expenses.any(
+        (e) => ((e['amount'] as num?)?.toDouble() ?? 0) > 0,
       );
 
       return Wrap(
@@ -113,18 +115,19 @@ class _CategoryFilterStrip extends StatelessWidget {
         children: [
           _filterChip(
             label: 'الكل',
-            amount: totalAll,
+            amountParts: hasAnyExpense ? totalParts : const [],
             selected: selected == null,
             onTap: () => controller.setClinicExpenseCategoryFilter(null),
           ),
           ...ClinicExpenseCategory.all.map((cat) {
-            final amount = controller.categoryExpenseTotal(cat.id);
-            if (amount <= 0 && selected != cat.id) {
+            final amountParts = controller.categoryExpenseAmountParts(cat.id);
+            final hasAmount = controller.categoryHasExpenses(cat.id);
+            if (!hasAmount && selected != cat.id) {
               return const SizedBox.shrink();
             }
             return _filterChip(
               label: cat.label,
-              amount: amount,
+              amountParts: hasAmount ? amountParts : const [],
               selected: selected == cat.id,
               icon: _categoryIcon(cat.id),
               onTap: () => controller.setClinicExpenseCategoryFilter(cat.id),
@@ -137,22 +140,22 @@ class _CategoryFilterStrip extends StatelessWidget {
 
   Widget _filterChip({
     required String label,
-    required double amount,
+    required List<String> amountParts,
     required bool selected,
     required VoidCallback onTap,
     IconData? icon,
   }) {
+    final textColor = selected ? Colors.white : AppColors.mainColor;
+
     return FilterChip(
       avatar: icon != null
-          ? Icon(icon, size: 16, color: selected ? Colors.white : AppColors.mainColor)
+          ? Icon(icon, size: 16, color: textColor)
           : null,
-      label: Text(
-        amount > 0 ? '$label · ${formatMoneyCompact(amount)}' : label,
-        style: GoogleFonts.poppins(
-          fontSize: 11,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-          color: selected ? Colors.white : AppColors.mainColor,
-        ),
+      label: _CategoryChipLabel(
+        title: label,
+        amountParts: amountParts,
+        textColor: textColor,
+        selected: selected,
       ),
       selected: selected,
       onSelected: (_) => onTap(),
@@ -163,6 +166,63 @@ class _CategoryFilterStrip extends StatelessWidget {
             ? AppColors.mainColor
             : AppColors.mainColor.withValues(alpha: 0.25),
       ),
+    );
+  }
+}
+
+class _CategoryChipLabel extends StatelessWidget {
+  const _CategoryChipLabel({
+    required this.title,
+    required this.amountParts,
+    required this.textColor,
+    required this.selected,
+  });
+
+  final String title;
+  final List<String> amountParts;
+  final Color textColor;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (amountParts.isEmpty) {
+      return Text(
+        title,
+        style: GoogleFonts.poppins(
+          fontSize: 11,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          color: textColor,
+        ),
+      );
+    }
+
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 6,
+      runSpacing: 2,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 11,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: textColor,
+          ),
+        ),
+        ...amountParts.map(
+          (part) => Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(
+              part,
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -194,9 +254,8 @@ class _GroupedExpenseList extends StatelessWidget {
       children: orderedIds.map((catId) {
         final cat = ClinicExpenseCategory.byId(catId);
         final items = grouped[catId]!;
-        final subtotal = items.fold<double>(
-          0,
-          (s, e) => s + ((e['amount'] as num?)?.toDouble() ?? 0),
+        final subtotalParts = currencyAmountParts(
+          sumAmountsByCurrency(items, 'amount'),
         );
 
         return Column(
@@ -223,13 +282,23 @@ class _GroupedExpenseList extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    formatMoney(subtotal),
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: AppColors.mainColor,
-                    ),
+                  Wrap(
+                    spacing: 6,
+                    children: subtotalParts
+                        .map(
+                          (p) => Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text(
+                              p,
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: AppColors.mainColor,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
               ),
@@ -267,6 +336,7 @@ class _ExpenseList extends StatelessWidget {
         );
         final description = expense['description']?.toString() ?? 'غير محدد';
         final amount = (expense['amount'] as num?)?.toDouble() ?? 0;
+        final currencyCode = recordCurrencyCode(expense);
         final note = expense['note']?.toString() ?? '';
         final date = controller.parseDate(
           expense['expense_date'] ?? expense['created_at'],
@@ -352,7 +422,7 @@ class _ExpenseList extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    formatMoney(amount),
+                    formatMoneyTagged(amount, currencyCode),
                     style: GoogleFonts.poppins(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,

@@ -74,6 +74,7 @@ class InvoicesController extends GetxController {
       'total': values.total,
       'status': values.status,
       'type_of_treatment': values.typeOfTreatment,
+      'currency': values.currency,
     });
     await loadAll();
   }
@@ -87,6 +88,7 @@ class InvoicesController extends GetxController {
       'amount': payment.amount,
       'method': payment.method,
       'note': payment.note,
+      'currency': payment.currency,
     });
     await loadAll();
   }

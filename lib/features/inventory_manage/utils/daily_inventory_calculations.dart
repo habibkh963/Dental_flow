@@ -1,6 +1,7 @@
 import '../models/daily_financial_summary.dart';
 import 'clinic_expense_categories.dart';
 import 'daily_inventory_date.dart';
+import 'money_format.dart';
 
 typedef DatePredicate = bool Function(DateTime date);
 
@@ -131,6 +132,131 @@ Map<String, double> sumClinicExpensesByCategory(
   return totals;
 }
 
+Map<String, Map<String, double>> sumClinicExpensesByCategoryCurrency(
+  List<Map<String, dynamic>> expenses, {
+  DatePredicate? whereDate,
+}) {
+  final byCategory = <String, List<Map<String, dynamic>>>{};
+  for (final expense in expenses) {
+    final date = parseRecordDate(expense['expense_date'] ?? expense['created_at']);
+    if (date == null) continue;
+    if (whereDate != null && !whereDate(date)) continue;
+    final raw = expense['category']?.toString() ?? 'other';
+    final category = ClinicExpenseCategory.byId(raw).id;
+    byCategory.putIfAbsent(category, () => []).add(expense);
+  }
+  return {
+    for (final e in byCategory.entries)
+      e.key: sumAmountsByCurrency(e.value, 'amount'),
+  };
+}
+
+Map<String, double> sumPaymentsByCurrency(
+  List<Map<String, dynamic>> payments, {
+  DatePredicate? whereDate,
+}) {
+  final rows = <Map<String, dynamic>>[];
+  for (final payment in payments) {
+    final date = parseRecordDate(payment['paid_at'] ?? payment['date']);
+    if (date == null) continue;
+    if (whereDate != null && !whereDate(date)) continue;
+    rows.add(payment);
+  }
+  return sumAmountsByCurrency(rows, 'amount');
+}
+
+Map<String, double> sumInvoicesByCurrency(
+  List<Map<String, dynamic>> invoices, {
+  DatePredicate? whereDate,
+}) {
+  final rows = <Map<String, dynamic>>[];
+  for (final invoice in invoices) {
+    final date = parseRecordDate(invoice['issued_at']);
+    if (date == null) continue;
+    if (whereDate != null && !whereDate(date)) continue;
+    rows.add({
+      'total': invoice['total'],
+      'currency': invoice['currency'],
+    });
+  }
+  return sumAmountsByCurrency(rows, 'total');
+}
+
+Map<String, double> sumOutstandingByCurrency(
+  List<Map<String, dynamic>> invoices,
+  List<Map<String, dynamic>> payments, {
+  DatePredicate? whereInvoiceDate,
+}) {
+  final paymentsByInvoice = groupPaymentsByInvoice(payments);
+  final totals = <String, double>{};
+  for (final invoice in invoices) {
+    final issuedAt = parseRecordDate(invoice['issued_at']);
+    if (issuedAt == null) continue;
+    if (whereInvoiceDate != null && !whereInvoiceDate(issuedAt)) continue;
+
+    final invoiceId = invoice['id']?.toString() ?? '';
+    final invoiceTotal = toMoney(invoice['total']);
+    final paid = paymentsByInvoice[invoiceId] ?? 0;
+    final remaining = invoiceTotal - paid;
+    if (remaining <= 0) continue;
+    final code = recordCurrencyCode(invoice);
+    totals[code] = (totals[code] ?? 0) + remaining;
+  }
+  return totals;
+}
+
+Map<String, double> sumExpensesByCurrency({
+  required List<Map<String, dynamic>> outputs,
+  required List<Map<String, dynamic>> clinicExpenses,
+  DatePredicate? whereDate,
+}) {
+  final outRows = <Map<String, dynamic>>[];
+  for (final output in outputs) {
+    final date = parseRecordDate(output['date'] ?? output['created_at']);
+    if (date == null) continue;
+    if (whereDate != null && !whereDate(date)) continue;
+    outRows.add(output);
+  }
+  final clinicRows = <Map<String, dynamic>>[];
+  for (final expense in clinicExpenses) {
+    final date = parseRecordDate(expense['expense_date'] ?? expense['created_at']);
+    if (date == null) continue;
+    if (whereDate != null && !whereDate(date)) continue;
+    clinicRows.add(expense);
+  }
+  return mergeCurrencyTotals([
+    sumAmountsByCurrency(outRows, 'price'),
+    sumAmountsByCurrency(clinicRows, 'amount'),
+  ]);
+}
+
+Map<String, double> sumOutputsByCurrency(
+  List<Map<String, dynamic>> outputs, {
+  DatePredicate? whereDate,
+}) {
+  final rows = <Map<String, dynamic>>[];
+  for (final output in outputs) {
+    final date = parseRecordDate(output['date'] ?? output['created_at']);
+    if (date == null) continue;
+    if (whereDate != null && !whereDate(date)) continue;
+    rows.add(output);
+  }
+  return sumAmountsByCurrency(rows, 'price');
+}
+
+Map<String, double> netCashByCurrency({
+  required Map<String, double> payments,
+  required Map<String, double> expenses,
+}) {
+  final keys = {...payments.keys, ...expenses.keys};
+  final net = <String, double>{};
+  for (final key in keys) {
+    final value = (payments[key] ?? 0) - (expenses[key] ?? 0);
+    if (value != 0) net[key] = value;
+  }
+  return net;
+}
+
 class DailyFinancialReport {
   final DailyFinancialSummary daily;
   final DailyFinancialSummary monthly;
@@ -254,30 +380,48 @@ DailyPeriodFilterSummary computePeriodFilterSummary({
   final range = normalizeRange(start, end);
   bool inRange(DateTime date) => isDateInRange(date, range.$1, range.$2);
 
-  var paymentsTotal = 0.0;
+  final paymentsInRange = <Map<String, dynamic>>[];
   var paymentsCount = 0;
   for (final payment in payments) {
     final date = parseRecordDate(payment['date']);
     if (date == null || !inRange(date)) continue;
-    paymentsTotal += toMoney(payment['amount']);
+    paymentsInRange.add(payment);
     paymentsCount++;
   }
 
-  var expensesTotal = 0.0;
+  final outputsInRange = <Map<String, dynamic>>[];
   var outputsCount = 0;
   for (final output in outputs) {
     final date = parseRecordDate(output['date'] ?? output['created_at']);
     if (date == null || !inRange(date)) continue;
-    expensesTotal += toMoney(output['price']);
+    outputsInRange.add(output);
     outputsCount++;
   }
 
+  final clinicInRange = <Map<String, dynamic>>[];
   var clinicExpensesCount = 0;
   for (final expense in clinicExpenses) {
     final date = parseRecordDate(expense['expense_date'] ?? expense['created_at']);
     if (date == null || !inRange(date)) continue;
-    expensesTotal += toMoney(expense['amount']);
+    clinicInRange.add(expense);
     clinicExpensesCount++;
+  }
+
+  final payByCur = sumAmountsByCurrency(paymentsInRange, 'amount');
+  final outByCur = sumAmountsByCurrency(outputsInRange, 'price');
+  final clinicByCur = sumAmountsByCurrency(clinicInRange, 'amount');
+  final expenseByCur = <String, double>{};
+  for (final e in {...outByCur.keys, ...clinicByCur.keys}) {
+    expenseByCur[e] = (outByCur[e] ?? 0) + (clinicByCur[e] ?? 0);
+  }
+
+  var paymentsTotal = 0.0;
+  for (final v in payByCur.values) {
+    paymentsTotal += v;
+  }
+  var expensesTotal = 0.0;
+  for (final v in expenseByCur.values) {
+    expensesTotal += v;
   }
 
   return DailyPeriodFilterSummary(
@@ -287,6 +431,8 @@ DailyPeriodFilterSummary computePeriodFilterSummary({
     paymentsCount: paymentsCount,
     outputsCount: outputsCount,
     clinicExpensesCount: clinicExpensesCount,
+    paymentsByCurrency: payByCur,
+    expensesByCurrency: expenseByCur,
   );
 }
 
@@ -301,6 +447,7 @@ List<Map<String, dynamic>> normalizePayments(
       'id': payment['id'],
       'date': date,
       'amount': toMoney(payment['amount']),
+      'currency': recordCurrencyCode(payment),
       'patient_id': payment['patient_id'],
       'invoice_id': payment['invoice_id'],
       'payment_method': payment['method'] ?? 'نقدي',

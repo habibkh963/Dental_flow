@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/currency_utils.dart';
+import '../../settings_manage/controllers/app_currency_controller.dart';
 import '../models/inventory_item.dart';
 import 'daily_inventory_controller.dart';
 
@@ -18,8 +20,19 @@ class InventoryOutputDialogController extends GetxController {
 
   final selectedUnit = kDefaultInventoryUnit.obs;
   final useCustomUnit = false.obs;
+  final selectedCurrency = 'SYP'.obs;
 
   final saving = false.obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    final code = Get.isRegistered<AppCurrencyController>()
+        ? Get.find<AppCurrencyController>().code.value
+        : 'SYP';
+    selectedCurrency.value =
+        kInputCurrencyCodes.contains(code) ? code : 'SYP';
+  }
   final formError = RxnString();
 
   String get effectiveUnit => useCustomUnit.value
@@ -79,6 +92,7 @@ class InventoryOutputDialogController extends GetxController {
         'quantity': quantity,
         'unit': unit,
         'price': price,
+        'currency': selectedCurrency.value,
         'date': DateTime.now().toIso8601String(),
       });
       if (context.mounted) {

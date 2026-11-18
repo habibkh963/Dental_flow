@@ -39,6 +39,8 @@ class DailyPeriodFilterSummary {
   final int paymentsCount;
   final int outputsCount;
   final int clinicExpensesCount;
+  final Map<String, double> paymentsByCurrency;
+  final Map<String, double> expensesByCurrency;
 
   const DailyPeriodFilterSummary({
     required this.paymentsTotal,
@@ -47,9 +49,26 @@ class DailyPeriodFilterSummary {
     required this.paymentsCount,
     required this.outputsCount,
     this.clinicExpensesCount = 0,
+    this.paymentsByCurrency = const {},
+    this.expensesByCurrency = const {},
   });
 
   int get totalExpenseEntries => outputsCount + clinicExpensesCount;
+
+  String get paymentsLabel => formatAmountsByCurrency(paymentsByCurrency);
+  String get expensesLabel => formatAmountsByCurrency(expensesByCurrency);
+
+  String get netLabel {
+    if (paymentsByCurrency.isEmpty && expensesByCurrency.isEmpty) {
+      return formatMoney(netTotal);
+    }
+    final codes = {...paymentsByCurrency.keys, ...expensesByCurrency.keys};
+    if (codes.length > 1) return 'صافي — عدة عملات';
+    final code = codes.isEmpty ? 'SYP' : codes.first;
+    final pay = paymentsByCurrency[code] ?? 0;
+    final exp = expensesByCurrency[code] ?? 0;
+    return formatMoney(pay - exp, currencyCode: code);
+  }
 
   static const empty = DailyPeriodFilterSummary(
     paymentsTotal: 0,

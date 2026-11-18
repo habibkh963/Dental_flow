@@ -5,6 +5,7 @@ class PaymentRecord {
   final String method;
   final String note;
   final DateTime paidAt;
+  final String currency;
 
   const PaymentRecord({
     required this.id,
@@ -13,6 +14,7 @@ class PaymentRecord {
     required this.method,
     required this.note,
     required this.paidAt,
+    this.currency = 'SYP',
   });
 
   factory PaymentRecord.fromMap(Map<String, dynamic> map) {
@@ -23,6 +25,9 @@ class PaymentRecord {
       method: map['method']?.toString() ?? 'نقدي',
       note: map['note']?.toString() ?? '',
       paidAt: _parseDate(map['paid_at']) ?? DateTime.now(),
+      currency: map['currency']?.toString().trim().isNotEmpty == true
+          ? map['currency'].toString()
+          : 'SYP',
     );
   }
 

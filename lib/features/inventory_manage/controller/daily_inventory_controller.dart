@@ -9,10 +9,13 @@ import '../models/daily_inventory_tab.dart';
 import '../utils/clinic_expense_categories.dart';
 import '../utils/daily_inventory_calculations.dart';
 import '../utils/daily_inventory_date.dart';
+import '../utils/money_format.dart';
 import '../views/widgets/clinic_expense_dialog.dart';
 import '../views/widgets/inventory_output_dialog.dart';
 import 'clinic_expense_dialog_controller.dart';
 import 'inventory_output_dialog_controller.dart';
+
+enum InventoryMoneyScope { today, month, allTime }
 
 class DailyInventoryController extends GetxController {
   final db = DatabaseService.instance;
@@ -71,12 +74,87 @@ class DailyInventoryController extends GetxController {
     );
   }
 
+  Map<String, Map<String, double>> get displayedMonthExpenseBreakdownCurrency {
+    final selected = selectedHistoryMonth.value ?? DateTime.now();
+    return sumClinicExpensesByCategoryCurrency(
+      _allClinicExpenses,
+      whereDate: (date) => isSameMonth(date, startOfMonth(selected)),
+    );
+  }
+
+  Map<String, double> get displayedMonthInventoryOutputByCurrency {
+    final selected = selectedHistoryMonth.value ?? DateTime.now();
+    return sumOutputsByCurrency(
+      _allInventoryOutputs,
+      whereDate: (date) => isSameMonth(date, startOfMonth(selected)),
+    );
+  }
+
   double get displayedMonthInventoryOutputExpenses {
     final selected = selectedHistoryMonth.value ?? DateTime.now();
     return sumOutputExpenses(
       _allInventoryOutputs,
       whereDate: (date) => isSameMonth(date, startOfMonth(selected)),
     );
+  }
+
+  DatePredicate? _moneyScopePredicate(InventoryMoneyScope scope) {
+    switch (scope) {
+      case InventoryMoneyScope.today:
+        return isToday;
+      case InventoryMoneyScope.month:
+        final ref = selectedHistoryMonth.value ?? DateTime.now();
+        return (date) => isSameMonth(date, startOfMonth(ref));
+      case InventoryMoneyScope.allTime:
+        return null;
+    }
+  }
+
+  String moneyLabelInvoices(InventoryMoneyScope scope) =>
+      formatAmountsByCurrency(
+        sumInvoicesByCurrency(
+          _rawInvoices,
+          whereDate: _moneyScopePredicate(scope),
+        ),
+      );
+
+  String moneyLabelPayments(InventoryMoneyScope scope) =>
+      formatAmountsByCurrency(
+        sumPaymentsByCurrency(
+          _rawPayments,
+          whereDate: _moneyScopePredicate(scope),
+        ),
+      );
+
+  String moneyLabelOutstanding(InventoryMoneyScope scope) =>
+      formatAmountsByCurrency(
+        sumOutstandingByCurrency(
+          _rawInvoices,
+          _rawPayments,
+          whereInvoiceDate: _moneyScopePredicate(scope),
+        ),
+      );
+
+  String moneyLabelExpenses(InventoryMoneyScope scope) =>
+      formatAmountsByCurrency(
+        sumExpensesByCurrency(
+          outputs: _allInventoryOutputs,
+          clinicExpenses: _allClinicExpenses,
+          whereDate: _moneyScopePredicate(scope),
+        ),
+      );
+
+  String moneyLabelNetCash(InventoryMoneyScope scope) {
+    final pay = sumPaymentsByCurrency(
+      _rawPayments,
+      whereDate: _moneyScopePredicate(scope),
+    );
+    final exp = sumExpensesByCurrency(
+      outputs: _allInventoryOutputs,
+      clinicExpenses: _allClinicExpenses,
+      whereDate: _moneyScopePredicate(scope),
+    );
+    return formatAmountsByCurrency(netCashByCurrency(payments: pay, expenses: exp));
   }
 
   String get displayedMonthLabel {
@@ -96,6 +174,7 @@ class DailyInventoryController extends GetxController {
       isLoading.value = true;
       _rawInvoices = await db.getInvoices();
       _rawPayments = await db.getAllPayments();
+      _enrichPaymentCurrencies();
       _allPaymentsList = normalizePayments(_rawPayments);
       await Future.wait([_loadInventoryOutputs(), _loadClinicExpenses()]);
       _recalculateSummaries();
@@ -108,6 +187,23 @@ class DailyInventoryController extends GetxController {
 
   @override
   Future<void> refresh() => loadDailyData();
+
+  void _enrichPaymentCurrencies() {
+    final invoicesById = <String, Map<String, dynamic>>{};
+    for (final inv in _rawInvoices) {
+      final id = inv['id']?.toString();
+      if (id != null && id.isNotEmpty) {
+        invoicesById[id] = inv;
+      }
+    }
+    for (final payment in _rawPayments) {
+      final existing = payment['currency']?.toString().trim();
+      if (existing != null && existing.isNotEmpty) continue;
+      final invId = payment['invoice_id']?.toString();
+      final inv = invId != null ? invoicesById[invId] : null;
+      payment['currency'] = inv?['currency']?.toString() ?? 'SYP';
+    }
+  }
 
   void _recalculateSummaries() {
     financialReport.value = computeFinancialReport(
@@ -454,16 +550,26 @@ class DailyInventoryController extends GetxController {
         .toList();
   }
 
-  double categoryExpenseTotal(String categoryId) {
-    var total = 0.0;
-    for (final expense in filteredClinicExpenses) {
-      if (ClinicExpenseCategory.byId(expense['category']?.toString()).id !=
-          categoryId) {
-        continue;
-      }
-      total += (expense['amount'] as num?)?.toDouble() ?? 0;
-    }
-    return total;
+  Iterable<Map<String, dynamic>> _expensesInCategory(String categoryId) {
+    return filteredClinicExpenses.where(
+      (e) =>
+          ClinicExpenseCategory.byId(e['category']?.toString()).id ==
+          categoryId,
+    );
+  }
+
+  bool categoryHasExpenses(String categoryId) {
+    return _expensesInCategory(categoryId).any(
+      (e) => ((e['amount'] as num?)?.toDouble() ?? 0) > 0,
+    );
+  }
+
+  Map<String, double> categoryExpenseCurrencyTotals(String categoryId) {
+    return sumAmountsByCurrency(_expensesInCategory(categoryId), 'amount');
+  }
+
+  List<String> categoryExpenseAmountParts(String categoryId) {
+    return currencyAmountParts(categoryExpenseCurrencyTotals(categoryId));
   }
 
   void setClinicExpenseCategoryFilter(String? categoryId) {

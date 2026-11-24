@@ -7,6 +7,8 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 
+import '../../features/inventory_manage/utils/clinic_expense_categories.dart';
+
 class DatabaseService {
   DatabaseService._();
   static final DatabaseService instance = DatabaseService._();
@@ -287,6 +289,35 @@ class DatabaseService {
       }
     } catch (_) {}
 
+    try {
+      final cols = await db.rawQuery("PRAGMA table_info('invoices');");
+      if (cols.isNotEmpty && !cols.any((c) => c['name'] == 'patient_name')) {
+        await db.execute(
+          'ALTER TABLE invoices ADD COLUMN patient_name TEXT;',
+        );
+        await db.execute('''
+          UPDATE invoices
+          SET patient_name = (
+            SELECT trim(COALESCE(first_name, '') || ' ' || COALESCE(last_name, ''))
+            FROM patients
+            WHERE patients.id = invoices.patient_id
+          )
+          WHERE patient_id IS NOT NULL
+            AND (patient_name IS NULL OR patient_name = '');
+        ''');
+      }
+    } catch (_) {}
+
+    try {
+      final cols =
+          await db.rawQuery("PRAGMA table_info('daily_ledger_entries');");
+      if (cols.isNotEmpty && !cols.any((c) => c['name'] == 'title')) {
+        await db.execute(
+          'ALTER TABLE daily_ledger_entries ADD COLUMN title TEXT;',
+        );
+      }
+    } catch (_) {}
+
     for (final table in const [
       'daily_ledger_entries',
       'clinic_expenses',
@@ -372,6 +403,36 @@ class DatabaseService {
   }
 
   Future<int> deletePatient(String id) async {
+    final patientRows = await db.query(
+      'patients',
+      columns: ['first_name', 'last_name'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+  final archivedName = patientRows.isEmpty
+        ? ''
+        : '${patientRows.first['first_name'] ?? ''} ${patientRows.first['last_name'] ?? ''}'
+            .trim();
+    if (archivedName.isNotEmpty) {
+      await db.rawUpdate(
+        '''
+        UPDATE invoices
+        SET patient_id = NULL,
+            patient_name = COALESCE(NULLIF(trim(patient_name), ''), ?)
+        WHERE patient_id = ?
+        ''',
+        [archivedName, id],
+      );
+    } else {
+      await db.update(
+        'invoices',
+        {'patient_id': null},
+        where: 'patient_id = ?',
+        whereArgs: [id],
+      );
+    }
+
     final conditionIds = await db.query(
       'patient_conditions',
       columns: ['id'],
@@ -571,6 +632,7 @@ class DatabaseService {
     final data = {
       'id': id,
       'patient_id': invoice['patient_id'],
+      'patient_name': invoice['patient_name']?.toString() ?? '',
       'total': invoice['total'] ?? 0.0,
       'status': invoice['status'] ?? 'pending',
       'type_of_treatment': invoice['type_of_treatment'] ?? '',
@@ -1188,6 +1250,7 @@ class DatabaseService {
     await db.insert('daily_ledger_entries', {
       'id': id,
       'entry_type': data['entry_type'] ?? 'income',
+      'title': data['title'] ?? '',
       'amount': data['amount'] ?? 0,
       'currency': data['currency'] ?? 'SYP',
       'note': data['note'] ?? '',
@@ -1208,11 +1271,17 @@ class DatabaseService {
       SELECT p.amount AS amount,
              p.currency AS currency,
              p.note AS note,
-             p.method AS label,
+             p.method AS method,
              p.paid_at AS at,
-             COALESCE(i.type_of_treatment, 'دفعة فاتورة') AS title
+             COALESCE(
+               NULLIF(trim(i.patient_name), ''),
+               NULLIF(trim(pt.first_name || ' ' || pt.last_name), ''),
+               'مريض'
+             ) AS patient_name,
+             COALESCE(NULLIF(trim(i.type_of_treatment), ''), 'دفعة') AS treatment_type
       FROM payments p
       LEFT JOIN invoices i ON i.id = p.invoice_id
+      LEFT JOIN patients pt ON pt.id = i.patient_id
       WHERE date(substr(p.paid_at, 1, 10)) = ?
       ORDER BY p.paid_at DESC
       ''',
@@ -1252,17 +1321,20 @@ class DatabaseService {
     for (final p in payments) {
       incomes.add({
         'kind': 'payment',
-        'title': p['title']?.toString() ?? 'دفعة',
+        'title': p['patient_name']?.toString() ?? 'مريض',
+        'typeLabel': p['treatment_type']?.toString() ?? 'دفعة',
         'amount': (p['amount'] as num?)?.toDouble() ?? 0,
         'currency': p['currency']?.toString() ?? 'SYP',
         'note': p['note']?.toString() ?? '',
-        'subtitle': p['label']?.toString() ?? '',
+        'subtitle': p['method']?.toString() ?? '',
       });
     }
     for (final q in quickIncome) {
+      final name = q['title']?.toString().trim();
       incomes.add({
         'kind': 'quick',
-        'title': 'إيراد يدوي',
+        'title': (name != null && name.isNotEmpty) ? name : 'إيراد يدوي',
+        'typeLabel': 'إيراد يدوي',
         'amount': (q['amount'] as num?)?.toDouble() ?? 0,
         'currency': q['currency']?.toString() ?? 'SYP',
         'note': q['note']?.toString() ?? '',
@@ -1272,19 +1344,22 @@ class DatabaseService {
 
     final outgoings = <Map<String, dynamic>>[];
     for (final e in clinicExpenses) {
+      final categoryId = e['category']?.toString();
       outgoings.add({
         'kind': 'clinic_expense',
         'title': e['description']?.toString() ?? 'نفقة عيادة',
+        'typeLabel': ClinicExpenseCategory.byId(categoryId).label,
         'amount': (e['amount'] as num?)?.toDouble() ?? 0,
         'currency': e['currency']?.toString() ?? 'SYP',
         'note': e['note']?.toString() ?? '',
-        'subtitle': e['category']?.toString() ?? '',
+        'subtitle': categoryId ?? '',
       });
     }
     for (final o in outputs) {
       outgoings.add({
         'kind': 'inventory_output',
         'title': o['item_name']?.toString() ?? 'مخرج مخزون',
+        'typeLabel': 'مخرج مخزون',
         'amount': (o['price'] as num?)?.toDouble() ?? 0,
         'currency': o['currency']?.toString() ?? 'SYP',
         'note': '',
@@ -1292,9 +1367,11 @@ class DatabaseService {
       });
     }
     for (final q in quickExpense) {
+      final name = q['title']?.toString().trim();
       outgoings.add({
         'kind': 'quick',
-        'title': 'مصروف يدوي',
+        'title': (name != null && name.isNotEmpty) ? name : 'مصروف يدوي',
+        'typeLabel': 'مصروف يدوي',
         'amount': (q['amount'] as num?)?.toDouble() ?? 0,
         'currency': q['currency']?.toString() ?? 'SYP',
         'note': q['note']?.toString() ?? '',

@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 
 import '../../../appointment_manage/views/appointments_page.dart';
 import '../../../billing_manage/views/invoices_page.dart';
-import '../../../inventory_manage/views/daily_inventory_page.dart';
+import '../../../inventory_manage/views/clinic_payments_page.dart';
 import '../../../inventory_manage/views/inventory_page.dart';
 import '../../../patient_manage/views/patients_page.dart';
 import '../../../settings_manage/views/settings_page.dart';
@@ -73,7 +73,7 @@ class AppShell extends StatelessWidget {
       case 4:
         return InventoryPage();
       case 5:
-        return DailyInventoryPage();
+        return ClinicPaymentsPage();
       case 6:
         return SettingsPage();
       default:

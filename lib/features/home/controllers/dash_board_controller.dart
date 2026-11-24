@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import '../../../services/app_notification_service.dart';
+import '../../inventory_manage/utils/money_format.dart';
 import 'dart:async';
 
 class DashBoardController extends GetxController {
@@ -23,10 +24,17 @@ class DashBoardController extends GetxController {
 
   RxDouble monthlyNetProfit = 0.0.obs;
   RxDouble monthlyPaid = 0.0.obs;
+  final monthlyPaidByCurrency = <String, double>{}.obs;
+  final monthlyCostsByCurrency = <String, double>{}.obs;
+  final monthlyNetByCurrency = <String, double>{}.obs;
+  final clinicExpensesTodayByCurrency = <String, double>{}.obs;
 
   final selectedLedgerDay = Rx<DateTime>(DateTime.now());
   final ledgerIncomes = <Map<String, dynamic>>[].obs;
   final ledgerOutgoings = <Map<String, dynamic>>[].obs;
+  final ledgerIncomeTotalsByCurrency = <String, double>{}.obs;
+  final ledgerOutgoingTotalsByCurrency = <String, double>{}.obs;
+  final ledgerRevision = 0.obs;
   final ledgerLoading = false.obs;
 
   late Timer _refreshTimer;
@@ -51,6 +59,17 @@ class DashBoardController extends GetxController {
 
   @override
   Future<void> refresh() => loadStats();
+
+  /// بعد إضافة إيراد/مصروف يدوي — إعادة تحميل اليوم والملخص المالي دون إعادة تحميل كامل ثقيل.
+  Future<void> reloadLedgerAndFinance() async {
+    final day = DateTime(
+      selectedLedgerDay.value.year,
+      selectedLedgerDay.value.month,
+      selectedLedgerDay.value.day,
+    );
+    await loadDayLedger(day);
+    await _calculateMonthlyStats();
+  }
 
   Future<void> loadStats() async {
     try {
@@ -103,11 +122,18 @@ class DashBoardController extends GetxController {
         whereArgs: [DateFormat('yyyy-MM').format(now)],
       );
 
+      final paidByCurrency = <String, double>{};
       var totalPaid = 0.0;
       for (final payment in payments) {
-        totalPaid += (payment['amount'] as num?)?.toDouble() ?? 0;
+        final amount = (payment['amount'] as num?)?.toDouble() ?? 0;
+        final code = payment['currency']?.toString().trim();
+        final currency =
+            (code != null && code.isNotEmpty) ? code : 'SYP';
+        paidByCurrency[currency] = (paidByCurrency[currency] ?? 0) + amount;
+        totalPaid += amount;
       }
 
+      final costsByCurrency = <String, double>{};
       var totalCosts = 0.0;
       try {
         final inventoryOutputs = await db.db.query(
@@ -120,7 +146,13 @@ class DashBoardController extends GetxController {
         );
 
         for (final output in inventoryOutputs) {
-          totalCosts += (output['price'] as num?)?.toDouble() ?? 0;
+          final amount = (output['price'] as num?)?.toDouble() ?? 0;
+          final code = output['currency']?.toString().trim();
+          final currency =
+              (code != null && code.isNotEmpty) ? code : 'SYP';
+          costsByCurrency[currency] =
+              (costsByCurrency[currency] ?? 0) + amount;
+          totalCosts += amount;
         }
 
         final clinicExpenses = await db.db.query(
@@ -133,14 +165,71 @@ class DashBoardController extends GetxController {
         );
 
         for (final expense in clinicExpenses) {
-          totalCosts += (expense['amount'] as num?)?.toDouble() ?? 0;
+          final amount = (expense['amount'] as num?)?.toDouble() ?? 0;
+          final code = expense['currency']?.toString().trim();
+          final currency =
+              (code != null && code.isNotEmpty) ? code : 'SYP';
+          costsByCurrency[currency] =
+              (costsByCurrency[currency] ?? 0) + amount;
+          totalCosts += amount;
+        }
+
+        final manualIncome = await db.db.query(
+          'daily_ledger_entries',
+          where:
+              "entry_type = 'income' AND strftime('%Y-%m', datetime(substr(entry_date, 1, 19))) = ?",
+          whereArgs: [DateFormat('yyyy-MM').format(now)],
+        );
+        for (final row in manualIncome) {
+          final amount = (row['amount'] as num?)?.toDouble() ?? 0;
+          final code = row['currency']?.toString().trim();
+          final currency =
+              (code != null && code.isNotEmpty) ? code : 'SYP';
+          paidByCurrency[currency] = (paidByCurrency[currency] ?? 0) + amount;
+          totalPaid += amount;
+        }
+
+        final manualExpense = await db.db.query(
+          'daily_ledger_entries',
+          where:
+              "entry_type = 'expense' AND strftime('%Y-%m', datetime(substr(entry_date, 1, 19))) = ?",
+          whereArgs: [DateFormat('yyyy-MM').format(now)],
+        );
+        for (final row in manualExpense) {
+          final amount = (row['amount'] as num?)?.toDouble() ?? 0;
+          final code = row['currency']?.toString().trim();
+          final currency =
+              (code != null && code.isNotEmpty) ? code : 'SYP';
+          costsByCurrency[currency] =
+              (costsByCurrency[currency] ?? 0) + amount;
+          totalCosts += amount;
         }
       } catch (e) {
         debugPrint('Error calculating costs: $e');
       }
 
+      final netByCurrency = <String, double>{};
+      for (final code in {...paidByCurrency.keys, ...costsByCurrency.keys}) {
+        netByCurrency[code] =
+            (paidByCurrency[code] ?? 0) - (costsByCurrency[code] ?? 0);
+      }
+
       monthlyPaid.value = totalPaid;
       monthlyNetProfit.value = totalPaid - totalCosts;
+      monthlyPaidByCurrency.assignAll(paidByCurrency);
+      monthlyCostsByCurrency.assignAll(costsByCurrency);
+      monthlyNetByCurrency.assignAll(netByCurrency);
+
+      final todayStr = DateFormat('yyyy-MM-dd').format(now);
+      final todayClinic = await db.db.query(
+        'clinic_expenses',
+        where:
+            "date(substr(COALESCE(expense_date, created_at), 1, 10)) = ?",
+        whereArgs: [todayStr],
+      );
+      clinicExpensesTodayByCurrency.assignAll(
+        sumAmountsByCurrency(todayClinic, 'amount'),
+      );
     } catch (e) {
       debugPrint('Error calculating monthly stats: $e');
     }
@@ -191,27 +280,50 @@ class DashBoardController extends GetxController {
   }
 
   Future<void> loadDayLedger(DateTime day) async {
+    final normalized = DateTime(day.year, day.month, day.day);
     try {
       ledgerLoading.value = true;
-      final bundle = await db.getFinancialMovementsForDate(day);
+      final bundle = await db.getFinancialMovementsForDate(normalized);
       ledgerIncomes.assignAll(bundle['incomes'] ?? const []);
       ledgerOutgoings.assignAll(bundle['outgoings'] ?? const []);
+      _syncLedgerSummaryTotals();
+      ledgerRevision.value++;
     } catch (e) {
       debugPrint('Error loading day ledger: $e');
       ledgerIncomes.clear();
       ledgerOutgoings.clear();
+      _syncLedgerSummaryTotals();
+      ledgerRevision.value++;
     } finally {
       ledgerLoading.value = false;
     }
   }
 
-  double get ledgerIncomeTotal => ledgerIncomes.fold(
-        0.0,
-        (sum, e) => sum + ((e['amount'] as num?)?.toDouble() ?? 0),
-      );
+  void _syncLedgerSummaryTotals() {
+    ledgerIncomeTotalsByCurrency.assignAll(
+      sumAmountsByCurrency(ledgerIncomes, 'amount'),
+    );
+    ledgerOutgoingTotalsByCurrency.assignAll(
+      sumAmountsByCurrency(ledgerOutgoings, 'amount'),
+    );
+  }
 
-  double get ledgerOutgoingTotal => ledgerOutgoings.fold(
-        0.0,
-        (sum, e) => sum + ((e['amount'] as num?)?.toDouble() ?? 0),
-      );
+  String get ledgerDayInflowLabel =>
+      formatAmountsByCurrency(Map<String, double>.from(ledgerIncomeTotalsByCurrency));
+
+  String get ledgerDayOutflowLabel =>
+      formatAmountsByCurrency(Map<String, double>.from(ledgerOutgoingTotalsByCurrency));
+
+  String get ledgerDayNetLabel {
+    final codes = {
+      ...ledgerIncomeTotalsByCurrency.keys,
+      ...ledgerOutgoingTotalsByCurrency.keys,
+    };
+    if (codes.isEmpty) return formatMoneyCompact(0, currencyCode: 'SYP');
+    if (codes.length > 1) return 'صافي اليوم — عدة عملات';
+    final code = codes.first;
+    final net = (ledgerIncomeTotalsByCurrency[code] ?? 0) -
+        (ledgerOutgoingTotalsByCurrency[code] ?? 0);
+    return 'صافي ${formatMoneyCompact(net, currencyCode: code)}';
+  }
 }

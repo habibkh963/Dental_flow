@@ -19,9 +19,21 @@ class DashboardFinanceStrip extends StatelessWidget {
         : null;
 
     return Obx(() {
+      final _ = dash.ledgerRevision.value;
       final showDetails = dash.showFinanceDetails.value;
-      final todayPayments = dailyInventory?.daily.paymentsReceived ?? 0;
-      final todayLabel = formatMoneyCompact(todayPayments);
+      final todayPaymentsLabel = dailyInventory != null
+          ? dailyInventory.moneyLabelPayments(InventoryMoneyScope.today)
+          : formatAmountsByCurrency(const {});
+
+      final monthlyPaidLabel = formatAmountsByCurrency(
+        Map<String, double>.from(dash.monthlyPaidByCurrency),
+      );
+      final monthlyNetLabel = formatAmountsByCurrency(
+        Map<String, double>.from(dash.monthlyNetByCurrency),
+      );
+      final netPositive =
+          dash.monthlyNetByCurrency.values.every((v) => v >= 0) &&
+          dash.monthlyNetByCurrency.isNotEmpty;
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,32 +73,37 @@ class DashboardFinanceStrip extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           SizedBox(
-            height: 100,
+            height: 130,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
                 DashboardKpiChip(
-                  title: 'دفعات اليوم',
-                  value: todayLabel,
-                  icon: Icons.payments_outlined,
+                  title: 'وارد اليوم المختار',
+                  value: dash.ledgerDayInflowLabel,
+                  icon: Icons.south_west,
                   color: AppColors.mainColor,
                 ),
                 const SizedBox(width: 8),
                 DashboardKpiChip(
+                  title: 'دفعات اليوم',
+                  value: todayPaymentsLabel,
+                  icon: Icons.payments_outlined,
+                  color: Colors.teal,
+                ),
+                const SizedBox(width: 8),
+                DashboardKpiChip(
                   title: 'مدفوعات الشهر',
-                  value: formatMoneyCompact(dash.monthlyPaid.value),
+                  value: monthlyPaidLabel,
                   icon: Icons.account_balance_wallet_outlined,
                   color: Colors.green,
                 ),
                 const SizedBox(width: 8),
                 DashboardKpiChip(
                   title: 'صافي الشهر',
-                  value: formatMoneyCompact(dash.monthlyNetProfit.value),
+                  value: monthlyNetLabel,
                   icon: Icons.trending_up,
-                  color: dash.monthlyNetProfit.value >= 0
-                      ? Colors.purple
-                      : Colors.red,
-                  subtitle: dash.monthlyNetProfit.value >= 0 ? 'ربح' : 'خسارة',
+                  color: netPositive ? Colors.purple : Colors.red,
+                  subtitle: netPositive ? 'ربح' : 'خسارة',
                 ),
               ],
             ),
@@ -103,28 +120,47 @@ class DashboardFinanceStrip extends StatelessWidget {
               ),
               child: Column(
                 children: [
+                  _detailRow('إجمالي المدفوعات الشهرية', monthlyPaidLabel),
+                  const SizedBox(height: 6),
                   _detailRow(
-                    'إجمالي المدفوعات الشهرية',
-                    formatMoney(dash.monthlyPaid.value),
+                    'نفقات الشهر (عملات منفصلة)',
+                    formatAmountsByCurrency(
+                      Map<String, double>.from(dash.monthlyCostsByCurrency),
+                    ),
                   ),
                   const SizedBox(height: 6),
                   _detailRow(
                     'صافي الربح الشهري',
-                    formatMoney(dash.monthlyNetProfit.value),
-                    valueColor: dash.monthlyNetProfit.value >= 0
+                    monthlyNetLabel,
+                    valueColor: netPositive
                         ? Colors.green.shade700
                         : Colors.red.shade700,
                   ),
+                  const SizedBox(height: 6),
+                  _detailRow(
+                    'وارد اليوم المختار (شامل اليدوي)',
+                    dash.ledgerDayInflowLabel,
+                  ),
+                  const SizedBox(height: 6),
+                  _detailRow('صادر اليوم المختار', dash.ledgerDayOutflowLabel),
+                  const SizedBox(height: 6),
+                  _detailRow('صافي اليوم المختار', dash.ledgerDayNetLabel),
                   if (dailyInventory != null) ...[
                     const SizedBox(height: 6),
                     _detailRow(
                       'دفعات اليوم',
-                      dailyInventory.daily.paymentsLabel,
+                      dailyInventory.moneyLabelPayments(
+                        InventoryMoneyScope.today,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     _detailRow(
-                      'نفقات الشهر',
-                      dailyInventory.monthly.expensesLabel,
+                      'نفقات العيادة اليوم',
+                      formatAmountsByCurrency(
+                        Map<String, double>.from(
+                          dash.clinicExpensesTodayByCurrency,
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -139,17 +175,24 @@ class DashboardFinanceStrip extends StatelessWidget {
   Widget _detailRow(String label, String value, {Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[700]),
+        Flexible(
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey[700]),
+          ),
         ),
-        Text(
-          value,
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: valueColor ?? Colors.black87,
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: valueColor ?? Colors.black87,
+            ),
           ),
         ),
       ],

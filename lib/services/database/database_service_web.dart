@@ -67,6 +67,26 @@ class DatabaseService {
   }
 
   Future<int> deletePatient(String id) async {
+    Map<String, dynamic>? patient;
+    for (final row in _patients) {
+      if (row['id'] == id) {
+        patient = row;
+        break;
+      }
+    }
+    final archivedName = patient == null
+        ? ''
+        : '${patient['first_name'] ?? ''} ${patient['last_name'] ?? ''}'.trim();
+    for (final inv in _invoices) {
+      if (inv['patient_id'] == id) {
+        inv['patient_id'] = null;
+        if (archivedName.isNotEmpty) {
+          final existing = inv['patient_name']?.toString().trim() ?? '';
+          if (existing.isEmpty) inv['patient_name'] = archivedName;
+        }
+      }
+    }
+
     final conditionIds = _patientConditions
         .where((e) => e['patient_id'] == id)
         .map((e) => e['id'])
@@ -224,9 +244,11 @@ class DatabaseService {
     final data = {
       'id': id,
       'patient_id': invoice['patient_id'],
+      'patient_name': invoice['patient_name']?.toString() ?? '',
       'total': invoice['total'] ?? 0.0,
       'status': invoice['status'] ?? 'pending',
       'type_of_treatment': invoice['type_of_treatment'] ?? '',
+      'currency': invoice['currency'] ?? 'SYP',
       'issued_at': invoice['issued_at'] ?? now,
     };
     _invoices.add(data);
@@ -563,7 +585,9 @@ class DatabaseService {
     _dailyLedgerEntries.add({
       'id': id,
       'entry_type': data['entry_type'] ?? 'income',
+      'title': data['title'] ?? '',
       'amount': data['amount'] ?? 0,
+      'currency': data['currency'] ?? 'SYP',
       'note': data['note'] ?? '',
       'attachment_path': data['attachment_path'] ?? '',
       'entry_date': data['entry_date'] ?? now,
@@ -580,13 +604,51 @@ class DatabaseService {
     bool sameDay(String? raw) =>
         raw != null && raw.length >= 10 && raw.substring(0, 10) == dayStr;
 
+    String patientLabelForPayment(Map<String, dynamic> payment) {
+      final invoiceId = payment['invoice_id']?.toString();
+      if (invoiceId == null) return 'مريض';
+      Map<String, dynamic>? invoice;
+      for (final inv in _invoices) {
+        if (inv['id'] == invoiceId) {
+          invoice = inv;
+          break;
+        }
+      }
+      if (invoice == null) return 'مريض';
+      final stored = invoice['patient_name']?.toString().trim();
+      if (stored != null && stored.isNotEmpty) return stored;
+      final patientId = invoice['patient_id']?.toString();
+      for (final pt in _patients) {
+        if (pt['id'] == patientId) {
+          final name =
+              '${pt['first_name'] ?? ''} ${pt['last_name'] ?? ''}'.trim();
+          if (name.isNotEmpty) return name;
+        }
+      }
+      return 'مريض';
+    }
+
+    String treatmentForPayment(Map<String, dynamic> payment) {
+      final invoiceId = payment['invoice_id']?.toString();
+      if (invoiceId == null) return 'دفعة';
+      for (final inv in _invoices) {
+        if (inv['id'] == invoiceId) {
+          final t = inv['type_of_treatment']?.toString().trim();
+          return (t != null && t.isNotEmpty) ? t : 'دفعة';
+        }
+      }
+      return 'دفعة';
+    }
+
     final incomes = <Map<String, dynamic>>[];
     for (final p in _payments) {
       if (!sameDay(p['paid_at']?.toString())) continue;
       incomes.add({
         'kind': 'payment',
-        'title': 'دفعة فاتورة',
+        'title': patientLabelForPayment(p),
+        'typeLabel': treatmentForPayment(p),
         'amount': (p['amount'] as num?)?.toDouble() ?? 0,
+        'currency': p['currency']?.toString() ?? 'SYP',
         'note': p['note']?.toString() ?? '',
         'subtitle': p['method']?.toString() ?? '',
       });
@@ -595,10 +657,13 @@ class DatabaseService {
       if (q['entry_type'] != 'income' || !sameDay(q['entry_date']?.toString())) {
         continue;
       }
+      final name = q['title']?.toString().trim();
       incomes.add({
         'kind': 'quick',
-        'title': 'إيراد يدوي',
+        'title': (name != null && name.isNotEmpty) ? name : 'إيراد يدوي',
+        'typeLabel': 'إيراد يدوي',
         'amount': (q['amount'] as num?)?.toDouble() ?? 0,
+        'currency': q['currency']?.toString() ?? 'SYP',
         'note': q['note']?.toString() ?? '',
       });
     }
@@ -609,7 +674,9 @@ class DatabaseService {
       outgoings.add({
         'kind': 'clinic_expense',
         'title': e['description']?.toString() ?? 'نفقة',
+        'typeLabel': e['category']?.toString() ?? 'أخرى',
         'amount': (e['amount'] as num?)?.toDouble() ?? 0,
+        'currency': e['currency']?.toString() ?? 'SYP',
         'note': e['note']?.toString() ?? '',
       });
     }
@@ -618,7 +685,9 @@ class DatabaseService {
       outgoings.add({
         'kind': 'inventory_output',
         'title': o['item_name']?.toString() ?? 'مخرج',
+        'typeLabel': 'مخرج مخزون',
         'amount': (o['price'] as num?)?.toDouble() ?? 0,
+        'currency': o['currency']?.toString() ?? 'SYP',
         'note': '',
       });
     }
@@ -626,10 +695,13 @@ class DatabaseService {
       if (q['entry_type'] != 'expense' || !sameDay(q['entry_date']?.toString())) {
         continue;
       }
+      final name = q['title']?.toString().trim();
       outgoings.add({
         'kind': 'quick',
-        'title': 'مصروف يدوي',
+        'title': (name != null && name.isNotEmpty) ? name : 'مصروف يدوي',
+        'typeLabel': 'مصروف يدوي',
         'amount': (q['amount'] as num?)?.toDouble() ?? 0,
+        'currency': q['currency']?.toString() ?? 'SYP',
         'note': q['note']?.toString() ?? '',
       });
     }

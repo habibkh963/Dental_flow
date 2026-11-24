@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/app_date_picker.dart';
 import '../../../../core/colors.dart';
 import '../../controller/daily_inventory_controller.dart';
 import '../../utils/daily_inventory_date.dart';
@@ -97,15 +98,11 @@ class DailyPeriodFilter extends StatelessWidget {
     required DateTime initial,
     required ValueChanged<DateTime> onSelected,
   }) async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showAppDatePicker(
+      context,
       initialDate: initial,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      initialDatePickerMode: DatePickerMode.day,
-      helpText: 'اختر التاريخ',
-      cancelText: 'إلغاء',
-      confirmText: 'تأكيد',
     );
     if (picked != null) onSelected(picked);
   }

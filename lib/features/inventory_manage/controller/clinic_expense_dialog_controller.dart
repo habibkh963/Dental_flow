@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/app_date_picker.dart';
 import '../../../core/currency_utils.dart';
 import '../../settings_manage/controllers/app_currency_controller.dart';
+import '../../home/controllers/dash_board_controller.dart';
 import '../utils/clinic_expense_categories.dart';
 import 'daily_inventory_controller.dart';
 
@@ -26,6 +28,10 @@ class ClinicExpenseDialogController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    if (Get.isRegistered<DashBoardController>()) {
+      final day = Get.find<DashBoardController>().selectedLedgerDay.value;
+      expenseDate = DateTime(day.year, day.month, day.day);
+    }
     final code = Get.isRegistered<AppCurrencyController>()
         ? Get.find<AppCurrencyController>().code.value
         : 'SYP';
@@ -44,11 +50,12 @@ class ClinicExpenseDialogController extends GetxController {
   }
 
   Future<void> pickDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showAppDatePicker(
+      context,
       initialDate: expenseDate,
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'تاريخ النفقة',
     );
     if (picked != null) {
       expenseDate = picked;
@@ -81,6 +88,16 @@ class ClinicExpenseDialogController extends GetxController {
         'expense_date': expenseDate.toIso8601String(),
         'note': note,
       });
+      if (Get.isRegistered<DashBoardController>()) {
+        final dash = Get.find<DashBoardController>();
+        final day = dash.selectedLedgerDay.value;
+        if (day.year == expenseDate.year &&
+            day.month == expenseDate.month &&
+            day.day == expenseDate.day) {
+          await dash.loadDayLedger(day);
+        }
+        await dash.reloadLedgerAndFinance();
+      }
       if (context.mounted) {
         Navigator.of(context).pop();
       }

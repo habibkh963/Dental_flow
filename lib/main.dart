@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
@@ -81,8 +82,15 @@ class DentalClinic extends StatelessWidget {
       builder: (context, child) {
         return GetMaterialApp(
           locale: const Locale('ar'),
-
-          // supportedLocales: const [Locale('ar'), Locale('en')],
+          supportedLocales: const [
+            Locale('ar'),
+            Locale('en'),
+          ],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           title: 'Dental Clinic Manager',
           theme: theme,
           debugShowCheckedModeBanner: false,

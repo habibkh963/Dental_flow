@@ -33,7 +33,7 @@ class AppNavBar extends StatelessWidget {
       _NavEntry(index: 2, label: 'المعاينات', icon: assets.calendar_png),
       _NavEntry(index: 3, label: 'الفواتير', icon: assets.invoice_png),
       _NavEntry(index: 4, label: 'المخزن', icon: assets.supply_png),
-      _NavEntry(index: 5, label: 'الجرد', icon: assets.supply_png),
+      _NavEntry(index: 5, label: 'مدفوعات العيادة', icon: assets.invoice_png),
       _NavEntry(index: 6, label: 'الإعدادات', icon: assets.settings_png),
     ];
 

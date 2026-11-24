@@ -10,6 +10,7 @@ class DashboardKpiChip extends StatelessWidget {
     required this.color,
     this.subtitle,
     this.hasAlert = false,
+    this.onTap,
   });
 
   final String title;
@@ -18,10 +19,11 @@ class DashboardKpiChip extends StatelessWidget {
   final Color color;
   final String? subtitle;
   final bool hasAlert;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final chip = Container(
       width: 180,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -59,7 +61,7 @@ class DashboardKpiChip extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 value,
-                maxLines: 1,
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
                   fontSize: 18,
@@ -95,6 +97,16 @@ class DashboardKpiChip extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+
+    if (onTap == null) return chip;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: chip,
       ),
     );
   }

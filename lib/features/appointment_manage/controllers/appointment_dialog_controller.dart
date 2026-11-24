@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../core/app_date_picker.dart';
 import '../../../services/database_service.dart';
 import '../../home/controllers/dash_board_controller.dart';
 import '../models/appointment.dart';
@@ -105,11 +106,12 @@ class AppointmentDialogController extends GetxController {
   }
 
   Future<void> pickDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showAppDatePicker(
+      context,
       initialDate: selectedDate.value ?? DateTime.now(),
       firstDate: DateTime(2022),
       lastDate: DateTime(2030),
+      helpText: 'تاريخ المعاينة',
     );
     if (picked != null) {
       selectedDate.value = picked;

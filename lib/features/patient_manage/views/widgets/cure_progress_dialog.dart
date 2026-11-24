@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/app_date_picker.dart';
 import '../../../../core/colors.dart';
 import '../../controller/patient_profile_controller.dart';
 import '../../models/patient_condition.dart';
@@ -69,11 +70,12 @@ class _CureProgressDialogState extends State<_CureProgressDialog> {
   }
 
   Future<void> _pickDateTime() async {
-    final date = await showDatePicker(
-      context: context,
+    final date = await showAppDatePicker(
+      context,
       initialDate: recordedAt,
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'تاريخ التسجيل',
     );
     if (date == null || !mounted) return;
 

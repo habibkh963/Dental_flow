@@ -25,7 +25,7 @@ class DashboardPage extends GetView<DashBoardController> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeader(context),
+              _buildHeader(),
               const SizedBox(height: 16),
               const DashboardQuickActions(),
               const SizedBox(height: 14),
@@ -33,9 +33,11 @@ class DashboardPage extends GetView<DashBoardController> {
               const SizedBox(height: 16),
               const DashboardDayLedger(),
               const SizedBox(height: 16),
-              const DashboardStatStrip(),
-              const SizedBox(height: 14),
+
               const DashboardFinanceStrip(),
+              const SizedBox(height: 14),
+              const DashboardStatStrip(),
+
               const SizedBox(height: 8),
             ],
           ),
@@ -44,34 +46,12 @@ class DashboardPage extends GetView<DashBoardController> {
     );
   }
 
-  Future<void> _pickLedgerDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: controller.selectedLedgerDay.value,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      locale: const Locale('ar'),
-    );
-    if (picked != null) {
-      await controller.setLedgerDay(picked);
-    }
-  }
-
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader() {
     return Row(
       children: [
         Text(
           'الرئيسية',
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        IconButton(
-          tooltip: 'اختيار تاريخ الحركة المالية',
-          onPressed: () => _pickLedgerDate(context),
-          icon: const Icon(Icons.calendar_month_outlined),
-          color: AppColors.mainColor,
+          style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600),
         ),
         const Spacer(),
         Obx(() {

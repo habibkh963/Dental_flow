@@ -9,10 +9,12 @@ class Invoice {
   final String typeOfTreatment;
   final double remainingBalance;
   final String currency;
+  final String patientName;
 
   const Invoice({
     required this.id,
     required this.patientId,
+    required this.patientName,
     required this.total,
     required this.status,
     required this.issuedAt,
@@ -35,6 +37,7 @@ class Invoice {
     return Invoice(
       id: map['id']?.toString() ?? '',
       patientId: map['patient_id']?.toString() ?? '',
+      patientName: map['patient_name']?.toString().trim() ?? '',
       total: _parseDouble(map['total']),
       status: InvoiceStatusParsing.fromString(map['status']?.toString()),
       issuedAt: _parseDate(map['issued_at']) ?? DateTime.now(),

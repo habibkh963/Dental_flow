@@ -116,6 +116,9 @@ class PaymentDialogController extends GetxController {
       if (Get.isRegistered<DailyInventoryController>()) {
         await Get.find<DailyInventoryController>().refresh();
       }
+      if (Get.isRegistered<DashBoardController>()) {
+        await Get.find<DashBoardController>().refresh();
+      }
       Get.snackbar(
         'نجح',
         'تم تسجيل عملية الدفع',

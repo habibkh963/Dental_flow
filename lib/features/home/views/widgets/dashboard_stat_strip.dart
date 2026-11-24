@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../inventory_manage/utils/money_format.dart';
 import '../../controllers/dash_board_controller.dart';
+import '../../controllers/navigation_controller.dart';
 import 'dashboard_kpi_chip.dart';
 
 class DashboardStatStrip extends GetView<DashBoardController> {
@@ -44,14 +46,15 @@ class DashboardStatStrip extends GetView<DashBoardController> {
                 ),
                 const SizedBox(width: 8),
                 DashboardKpiChip(
-                  title: 'مخزون منخفض',
-                  value: controller.lowStockCount.value.toString(),
-                  icon: Icons.inventory_2_outlined,
+                  title: 'نفقات العيادة اليوم',
+                  value: formatAmountsByCurrency(
+                    Map<String, double>.from(
+                      controller.clinicExpensesTodayByCurrency,
+                    ),
+                  ),
+                  icon: Icons.receipt_long_outlined,
                   color: Colors.orange,
-                  hasAlert: controller.hasLowStock.value,
-                  subtitle: controller.hasLowStock.value
-                      ? 'يحتاج متابعة'
-                      : null,
+                  onTap: () => Get.find<NavigationController>().select(5),
                 ),
               ],
             ),

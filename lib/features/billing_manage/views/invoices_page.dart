@@ -93,7 +93,7 @@ class InvoicesPage extends GetView<InvoicesController> {
         itemCount: controller.filteredInvoices.length,
         itemBuilder: (_, index) {
           final invoice = controller.filteredInvoices[index];
-          final patientName = controller.getPatientName(invoice.patientId);
+          final patientName = controller.displayPatientName(invoice);
 
           return InvoiceTile(
             invoice: invoice,

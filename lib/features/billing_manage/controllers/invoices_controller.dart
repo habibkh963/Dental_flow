@@ -60,6 +60,7 @@ class InvoicesController extends GetxController {
   }
 
   String getPatientName(String patientId) {
+    if (patientId.isEmpty) return '-';
     try {
       final p = patients.firstWhere((x) => x['id'] == patientId);
       return '${p['first_name'] ?? ''} ${p['last_name'] ?? ''}'.trim();
@@ -68,9 +69,17 @@ class InvoicesController extends GetxController {
     }
   }
 
+  String displayPatientName(Invoice invoice) {
+    final stored = invoice.patientName.trim();
+    if (stored.isNotEmpty) return stored;
+    final live = getPatientName(invoice.patientId);
+    return live == '-' ? 'مريض محذوف' : live;
+  }
+
   Future<void> createInvoice(InvoiceFormValues values) async {
     await db.addInvoice({
       'patient_id': values.patientId,
+      'patient_name': getPatientName(values.patientId),
       'total': values.total,
       'status': values.status,
       'type_of_treatment': values.typeOfTreatment,
@@ -187,7 +196,7 @@ class InvoicesController extends GetxController {
 
     filteredInvoices.assignAll(
       _invoices.where((invoice) {
-        final patientName = getPatientName(invoice.patientId).toLowerCase();
+        final patientName = displayPatientName(invoice).toLowerCase();
         return patientName.contains(q);
       }).toList(),
     );

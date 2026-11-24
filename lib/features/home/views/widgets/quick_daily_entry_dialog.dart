@@ -31,6 +31,7 @@ class _QuickDailyEntryForm extends StatefulWidget {
 }
 
 class _QuickDailyEntryFormState extends State<_QuickDailyEntryForm> {
+  final nameController = TextEditingController();
   final amountController = TextEditingController();
   final noteController = TextEditingController();
   var isIncome = true;
@@ -52,12 +53,18 @@ class _QuickDailyEntryFormState extends State<_QuickDailyEntryForm> {
 
   @override
   void dispose() {
+    nameController.dispose();
     amountController.dispose();
     noteController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
+    final name = nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => error = 'الاسم مطلوب');
+      return;
+    }
     final amount = double.tryParse(amountController.text.trim()) ?? 0;
     if (amount <= 0) {
       setState(() => error = 'أدخل مبلغاً صحيحاً');
@@ -75,16 +82,18 @@ class _QuickDailyEntryFormState extends State<_QuickDailyEntryForm> {
     try {
       await DatabaseService.instance.addDailyLedgerEntry({
         'entry_type': isIncome ? 'income' : 'expense',
+        'title': name,
         'amount': amount,
         'currency': currencyCode,
         'note': noteController.text.trim(),
         'attachment_path': attachmentPath ?? '',
-        'entry_date': DateTime(day.year, day.month, day.day, 12)
-            .toIso8601String(),
+        'entry_date':
+            '${day.year.toString().padLeft(4, '0')}-'
+            '${day.month.toString().padLeft(2, '0')}-'
+            '${day.day.toString().padLeft(2, '0')}T12:00:00.000',
       });
       if (Get.isRegistered<DashBoardController>()) {
-        await Get.find<DashBoardController>().loadDayLedger(day);
-        await Get.find<DashBoardController>().refresh();
+        await Get.find<DashBoardController>().reloadLedgerAndFinance();
       }
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
@@ -118,6 +127,12 @@ class _QuickDailyEntryFormState extends State<_QuickDailyEntryForm> {
           ],
         ),
         const SizedBox(height: 16),
+        TextField(
+          controller: nameController,
+          decoration: inventoryFieldDecoration('الاسم / الجهة'),
+          onChanged: (_) => setState(() => error = null),
+        ),
+        const SizedBox(height: 12),
         AmountWithCurrencyField(
           amountController: amountController,
           selectedCurrencyCode: currencyCode,
